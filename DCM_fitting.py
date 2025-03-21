@@ -1,3 +1,4 @@
+# %%
 import os
 import numpy as np
 from scipy.optimize import leastsq, curve_fit
@@ -17,6 +18,7 @@ import matplotlib.pyplot as plt
 #### Column 2 : Magnitude in lin  ####
 #### Column 3 : Phase in radians  ####
 ######################################
+print(f"Define Organize_Date function...")
 def Organize_Data(raw_data):
     """
     Function to organize raw data to:
@@ -31,7 +33,6 @@ def Organize_Data(raw_data):
             - Column 2: Magnitude in dB
             - Column 3: Phase in degrees
     """
-
     # Ensure the input is a NumPy array
     raw_data = np.array(raw_data, dtype=str)
 
@@ -91,6 +92,7 @@ def Organize_Data(raw_data):
 #### 2. Frequency (GHz) vs Phase (deg) ####
 #### 3. Real(S21) vs Imag(S21)         ####
 ###########################################
+print(f"Define the Plot_Data function...")
 def Plot_Data(organized_data):
     """
     Function to plot raw data in three subplots:
@@ -104,7 +106,6 @@ def Plot_Data(organized_data):
             - Column 2: Magnitude in linear
             - Column 3: Phase in radians
     """
-
     # Extract values for plotting
     freq_Hz = organized_data[:, 0]
     mag_linear = organized_data[:, 1]
@@ -172,6 +173,7 @@ def Plot_Data(organized_data):
 #### para 1 : cable_delay(tau)     ####
 #### para 2 : phase offset (alpha) ####
 #######################################
+print(f"Define fit_cable_delay function...")
 def fit_cable_delay(organized_data):
     """
     Function to finds the cable delay to remove the slope of the phase response:
@@ -183,7 +185,6 @@ def fit_cable_delay(organized_data):
             - Column 2: Magnitude in linear
             - Column 3: Phase in radians
     """
-
     # Extract values for plotting
     freq_Hz = organized_data[:, 0]
     mag_linear = organized_data[:, 1]
@@ -201,7 +202,8 @@ def fit_cable_delay(organized_data):
     minus_two_pi_f_tau, alpha = np.polyfit(freq_bg, phase_bg, 1)    # Linear fit (degree = 1)
 
     tau = minus_two_pi_f_tau / (2 * np.pi)
-    print(f"cable_delay (tau) is {tau*1e9:.2f} ns, and phase offset (alpha) is {np.rad2deg(alpha):.2f} deg")
+    print(f"cable_delay (tau) is {tau*1e9:.2f} ns")
+    print(f"phase offset (alpha) is {np.rad2deg(alpha):.2f} deg")
 
     return tau, alpha
 #######################################
@@ -213,6 +215,7 @@ def fit_cable_delay(organized_data):
 #### Output:                       ####
 #### reorganized_data              ####
 #######################################
+print(f"Define remove_cable_delay function...")
 def remove_cable_delay(organized_data, tau, alpha):
     """
     Function to finds the cable delay to remove the slope of the phase response:
@@ -227,7 +230,6 @@ def remove_cable_delay(organized_data, tau, alpha):
     """
 
     print(f"Preprocess the phase correction...")
-    
     # Extract values for plotting
     freq_Hz = organized_data[:, 0]
     mag_linear = organized_data[:, 1]
@@ -258,6 +260,7 @@ def remove_cable_delay(organized_data, tau, alpha):
 #### Output:                       ####
 #### reorganized_data              ####
 #######################################
+print(f"Define remove_mag_bg function...")
 def remove_mag_bg(organized_data):
     
     print(f"Preprocess the background mag removal...")
@@ -301,11 +304,19 @@ def remove_mag_bg(organized_data):
 #### 1. Correct the phase   ####
 #### 2. Correct the mag     ####
 ################################ 
-# Define the folder path and CSV file
-file_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_5-NW_Ta2O5_15nm_01\2024_10_17_Final_Data_Modify_Fitting_Codes\2024_10_14_Most_Recent_Datasets_Organizing\Resonator_2_5p837GHz_Nf100\NW_Ta2O5_15nm_01_5p837GHz_-62dBm_-1000mK.csv"
+# Define folder path and file name separately
+folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_5-NW_Ta2O5_15nm_01\2024_10_17_Final_Data_Modify_Fitting_Codes\2024_10_14_Most_Recent_Datasets_Organizing\Resonator_2_5p837GHz_Nf100"
+file_name = r"NW_Ta2O5_15nm_01_5p837GHz_-62dBm_-1000mK.csv"
+
+# Combine folder path and file name
+file_path = os.path.join(folder_path, file_name)
 
 # Load data
 raw_data = pd.read_csv(file_path)
+
+# Print confirmation
+print(f"In the folder: {folder_path}")
+print(f"Load data from: {file_name}")
 
 organized_data = Organize_Data(raw_data)
 Plot_Data(organized_data)
@@ -316,3 +327,5 @@ Plot_Data(remove_cable_delay_data)
 
 remove_mag_bg_data = remove_mag_bg(remove_cable_delay_data)
 Plot_Data(remove_mag_bg_data)
+
+# %%
