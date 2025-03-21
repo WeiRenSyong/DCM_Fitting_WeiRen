@@ -82,6 +82,7 @@ def Organize_Data(raw_data):
     organized_data = np.column_stack((freq_Hz, mag_linear, phase_rad))
 
     return organized_data
+
 ###########################################
 #### Input:                            ####
 #### Column 1: Frequency in Hz         ####
@@ -207,6 +208,7 @@ def fit_cable_delay(organized_data):
     print(f"phase offset (alpha) is {np.rad2deg(alpha):.2f} deg")
 
     return tau, alpha
+
 #######################################
 #### Input:                        ####
 #### para 1 : organized_data       ####
@@ -299,15 +301,15 @@ def remove_mag_bg(organized_data):
 
     return remove_mag_bg_data
 
-# # %% Set a Testing Point - Check the complex circle after removing environment factors
+# %% Set a Testing Point - Check the complex circle after removing environment factors
 # ################################
 # #### Use to be a Test Point ####
 # #### 1. Correct the phase   ####
 # #### 2. Correct the mag     ####
 # ################################ 
 # # Define folder path and file name separately
-# folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_5-NW_Ta2O5_15nm_01\2024_10_17_Final_Data_Modify_Fitting_Codes\2024_10_14_Most_Recent_Datasets_Organizing\Resonator_2_5p837GHz_Nf100"
-# file_name = r"NW_Ta2O5_15nm_01_5p837GHz_-62dBm_-1000mK.csv"
+# folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_4-Tony_Ta_NbSi_03\Resonator_3_5p863GHz"
+# file_name = r"Tony_Ta_NbSi_03_5p863GHz_-90dBm_-1000mK.csv"
 
 # # Combine folder path and file name
 # file_path = os.path.join(folder_path, file_name)
@@ -445,10 +447,10 @@ def find_phi(organized_data):
     zc, r = find_circle(organized_data)
 
     phi = np.pi - np.angle(zc - 1)  # Phase of (S21_fc - (1+0j)) in rad
-    return phi
+    return -phi
 
 print(f"Define find_Q function...")
-def find_Q(organized_data):
+def find_Q(organized_data, plot=None):
     """
     Function to find the quality factor (Q) = fc / FWHM:
 
@@ -488,9 +490,20 @@ def find_Q(organized_data):
         
     Q = fc / FWHM
 
-    plt.plot(freq_Hz, mag_lin, color='black', linestyle='-', linewidth=2, label="mag_lin")
-    plt.scatter(freq_Hz[idx_lower], mag_lin[idx_lower], color='red', s=500, marker='*', zorder=5, label="freq_lower")
-    plt.scatter(freq_Hz[idx_upper], mag_lin[idx_upper], color='green', s=500, marker='*', zorder=5, label="freq_upper")
+    if plot:
+        freq_GHz = freq_Hz / 1e9
+        plt.figure(figsize=(8, 6))
+        plt.plot(freq_GHz, mag_lin, color='black', linestyle='-', linewidth=2, label="mag_lin")
+        plt.scatter(freq_Hz[idx_lower] / 1e9, mag_lin[idx_lower], color='red', s=500, marker='*', zorder=5, label="freq_lower")
+        plt.scatter(freq_Hz[idx_upper] / 1e9, mag_lin[idx_upper], color='green', s=500, marker='*', zorder=5, label="freq_upper")
+
+        plt.xlabel("Frequency (GHz)")
+        plt.ylabel("Magnitude (dB)")
+        plt.title("Frequency vs Magnitude")
+        plt.grid(True)
+        plt.xticks([np.min(freq_GHz), (np.min(freq_GHz) + np.max(freq_GHz)) / 2, np.max(freq_GHz)])
+        plt.legend()
+        plt.show()
 
     return Q
 
@@ -527,7 +540,7 @@ def find_Qc(organized_data, guess_fc):
 ##############################################
 # Define folder path and file name separately
 folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_4-Tony_Ta_NbSi_03\Resonator_3_5p863GHz"
-file_name = r"Tony_Ta_NbSi_03_5p863GHz_-34dBm_-1000mK.csv"
+file_name = r"Tony_Ta_NbSi_03_5p863GHz_-90dBm_-1000mK.csv"
 
 # Combine folder path and file name
 file_path = os.path.join(folder_path, file_name)
@@ -540,13 +553,15 @@ print(f"In the folder: {folder_path}")
 print(f"Load data from: {file_name}")
 
 organized_data = Organize_Data(raw_data)
+Plot_Data(organized_data)
 tau_fit, phi0_fit = fit_cable_delay(organized_data)
 remove_cable_delay_data = remove_cable_delay(organized_data, tau_fit, phi0_fit)
 reorganized_data = remove_mag_bg(remove_cable_delay_data)
+Plot_Data(reorganized_data)
 
 guess_fc = find_fc(reorganized_data)
 guess_phi = find_phi(reorganized_data)
-guess_Q = find_Q(organized_data)
+guess_Q = find_Q(organized_data, plot=None)
 guess_Qc = find_Qc(organized_data, guess_fc)
 print(f"Initial guess fc: {guess_fc/1e9:.4f} GHz")
 print(f"Initial guess phi: {np.rad2deg(guess_phi):.4f} deg")
@@ -594,4 +609,5 @@ plt.axis('equal')
 
 # Show the plot
 plt.show()
+
 # %% Start Fitting Using Initial Guessing
