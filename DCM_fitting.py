@@ -570,7 +570,8 @@ print(f"Initial guess Qc: {guess_Qc/1e6:.4f} x 10\u2076")
 print(f"==============================================")
 print(f"The infered internal quality factor (Qi): {(guess_Q*guess_Qc)/(guess_Qc-guess_Q)/1e6:.4f} x 10\u2076")
 
-# %% Mark fc on the Complex Plot
+# %% Draw the Initial Guessing Fitting
+# Mark fc on the Complex Plot
 freq_Hz = reorganized_data[:, 0]  # Frequency in Hz
 mag_lin = reorganized_data[:, 1]  # Magnitude in linear scale
 phase_rad = reorganized_data[:, 2]  # Phase in radians
