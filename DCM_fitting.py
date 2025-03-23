@@ -84,34 +84,22 @@ def Organize_Data(raw_data):
 ###########################################
 print(f"Define the Plot_Data function...")
 def Plot_Data(organized_data):
-    """
-    Function to plot raw data in three subplots:
-    1. Frequency (GHz) vs Magnitude (dB)
-    2. Frequency (GHz) vs Phase (degrees)
-    3. Real(S21) vs Imag(S21)
-
-    Parameters:
-        organized_data: N×3 matrix containing:
-            - Column 1: Frequency in Hz
-            - Column 2: Magnitude in linear
-            - Column 3: Phase in radians
-    """
     # Extract values for plotting
     freq_Hz = organized_data[:, 0]
-    mag_linear = organized_data[:, 1]
+    mag_lin = organized_data[:, 1]
     phase_rad = organized_data[:, 2]
 
     # Convert frequency to GHz for plotting
     freq_GHz = freq_Hz / 1e9
 
     # Convert magnitude to dB for plotting
-    mag_dB = 20 * np.log10(mag_linear)
+    mag_dB = 20 * np.log10(mag_lin)
     
     # Convert phase to degree for plotting
     phase_deg = np.rad2deg(phase_rad)
     
     # Compute real and imaginary parts of S21
-    S21 = mag_linear * np.exp(1j * phase_rad)
+    S21 = mag_lin * np.exp(1j * phase_rad)
     real_S21 = np.real(S21)
     imag_S21 = np.imag(S21)
 
@@ -120,10 +108,10 @@ def Plot_Data(organized_data):
 
     # Plot Frequency vs Magnitude (dB) - Left Top
     ax1 = fig.add_subplot(2, 2, 1)
-    ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Magnitude (dB)", alpha=1)
-    ax1.set_xlabel("Frequency (GHz)")
-    ax1.set_ylabel("Magnitude (dB)")
-    ax1.set_title("Frequency vs Magnitude")
+    ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Mag (dB)", alpha=1)
+    ax1.set_xlabel("Freq (GHz)")
+    ax1.set_ylabel("Mag (dB)")
+    ax1.set_title("Freq vs Mag")
     ax1.grid(True)
     ax1.legend()
     ax1.set_xticks([np.min(freq_GHz), (np.min(freq_GHz)+np.max(freq_GHz))/2, np.max(freq_GHz)])
@@ -131,16 +119,16 @@ def Plot_Data(organized_data):
     # Plot Frequency vs Phase (degrees) - Left Bottom
     ax2 = fig.add_subplot(2, 2, 3)
     ax2.scatter(freq_GHz, phase_deg, color='orange', s=50, marker='o', label="Phase (deg)", alpha=1)
-    ax2.set_xlabel("Frequency (GHz)")
+    ax2.set_xlabel("Freq (GHz)")
     ax2.set_ylabel("Phase (deg)")
-    ax2.set_title("Frequency vs Phase")
+    ax2.set_title("Freq vs Phase")
     ax2.grid(True)
     ax2.legend()
     ax2.set_xticks([np.min(freq_GHz), (np.min(freq_GHz)+np.max(freq_GHz))/2, np.max(freq_GHz)])
 
     # Plot Real(S21) vs Imag(S21) - Right
     ax3 = fig.add_subplot(1, 2, 2)  # Ensures a single, right-side wide plot
-    ax3.plot(real_S21, imag_S21, color='green', s=50, marker='o', label="S21 Complex Plane", alpha=1)
+    ax3.scatter(real_S21, imag_S21, color='green', s=50, marker='o', label="S21 Complex Plane", alpha=1)
     ax3.set_xlabel("Real(S21)")
     ax3.set_ylabel("Imag(S21)")
     ax3.set_title("S21 Complex Plane")
