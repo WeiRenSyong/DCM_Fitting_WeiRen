@@ -289,7 +289,6 @@ def remove_mag_bg(organized_data):
 #### 3. loaded quality factor (Q)                ####
 #### 4. coupling quality factor (Qc)             ####
 #####################################################
-print(f"Define find_circle finctino...")
 
 #####################################################
 #### Input:                                      ####
@@ -299,6 +298,7 @@ print(f"Define find_circle finctino...")
 #### 1. center (zc)                              ####
 #### 2. diameter (d)                             ####
 #####################################################
+print(f"Define find_circle finctino...")
 def find_circle(organized_data):
     # Extract frequency, magnitude, and phase from organized data
     freq_Hz = organized_data[:, 0]  # frequency in Hz
@@ -334,19 +334,15 @@ def find_circle(organized_data):
 
     return zc_fit, d_fit
 
+#####################################################
+#### Input:                                      ####
+#### para 1 : reorganized_data                   ####
+#####################################################
+#### Output:                                     ####
+#### 1. Resonance frequency (fc) in Hz           ####
+#####################################################
 print(f"Define find_fc function...")
 def find_fc(organized_data):
-    """
-    Function to finds the resonance frequency (fc):
-    1. Resonance frequency (fc) in Hz.
-
-    Parameters:
-    1. organized_data (numpy array): N×3 matrix containing:
-        - Column 1: Frequency in Hz
-        - Column 2: Magnitude in lin
-        - Column 3: Phase in rad
-    """
-
     # Extract frequency, magnitude, and phase from organized data
     freq_Hz = organized_data[:, 0]  # frequency in Hz
     mag_lin = organized_data[:, 1]  # magnitude in lin
@@ -357,22 +353,20 @@ def find_fc(organized_data):
     x = np.real(S21)
     y = np.imag(S21)
 
-    # Get the center (zc) and radius (r) of the fitted circle
-    zc, r = find_circle(organized_data)
+    # Get the center (zc) and diamter (d) of the fitted circle
+    zc, d = find_circle(organized_data)
     
     # Assuming z_fc is defined as the resonance point
     z_fc = 1 + (zc - 1) * 2
 
     # Function to calculate the Euclidean distance between two points
-    def calculate_distance(x1, y1, x2, y2):
+    def distance(x1, y1, x2, y2):
         return np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
     
     # Find the closest point to z_fc
-    distances = [calculate_distance(xi, yi, z_fc.real, z_fc.imag) for xi, yi in zip(x, y)]
-
+    distances = [distance(xi, yi, np.real(z_fc), np.imag(z_fc) for xi, yi in zip(x, y)]
     # Get the index of the closest point
     closest_index = np.argmin(distances)
-
     # Get the frequency corresponding to the closest point
     fc = organized_data[closest_index, 0]
 
