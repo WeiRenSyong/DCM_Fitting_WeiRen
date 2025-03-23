@@ -330,8 +330,9 @@ def find_circle(organized_data):
     # Get the fitted parameters
     xc_fit, yc_fit, r_fit = result.x
     zc_fit = xc_fit + 1j * yc_fit
-    
-    return zc_fit, r_fit
+    d_fit = r_fit * 2
+
+    return zc_fit, d_fit
 
 print(f"Define find_fc function...")
 def find_fc(organized_data):
