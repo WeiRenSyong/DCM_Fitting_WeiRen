@@ -140,8 +140,6 @@ def Plot_Data(organized_data):
     plt.tight_layout()
     plt.show()
 
-    #######################################
-
 # %% Preprocessing (1) - fit_cable_delay, fit_alpha
 #######################################
 #### Input:                        ####
@@ -153,19 +151,9 @@ def Plot_Data(organized_data):
 #######################################
 print(f"Define fit_cable_delay function...")
 def fit_cable_delay(organized_data):
-    """
-    Function to finds the cable delay to remove the slope of the phase response:
-    1. cable_delay
-
-    Parameters:
-        organized_data (numpy array): N×3 matrix containing:
-            - Column 1: Frequency in Hz
-            - Column 2: Magnitude in linear
-            - Column 3: Phase in radians
-    """
     # Extract values for plotting
     freq_Hz = organized_data[:, 0]
-    mag_linear = organized_data[:, 1]
+    mag_lin = organized_data[:, 1]
     phase_rad = organized_data[:, 2]
 
     # Unwrap phase to prevent discontinuities
@@ -177,10 +165,10 @@ def fit_cable_delay(organized_data):
     phase_bg = np.concatenate((phase_rad[:num_points], phase_rad[-num_points:]))
 
     # Perform linear fit to get A(slope) and B (offset)
-    minus_two_pi_f_tau, alpha = np.polyfit(freq_bg, phase_bg, 1)    # Linear fit (degree = 1)
+    minus_two_pi_tau, alpha = np.polyfit(freq_bg, phase_bg, 1)    # Linear fit (degree = 1)
 
-    tau = minus_two_pi_f_tau / (2 * np.pi)
-    print(f"cable_delay (tau) is {tau*1e9:.2f} ns")
+    tau = minus_two_pi_tau / (-2 * np.pi)
+    print(f"cable_delay (tau) is {tau * 1e9:.2f} ns")
     print(f"phase offset (alpha) is {np.rad2deg(alpha):.2f} deg")
 
     return tau, alpha
