@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
-from scipy.signal import find_peaks
 
 # %% Define Some Useful Functions
 ######################################
@@ -132,7 +131,7 @@ def Plot_Data(organized_data):
 
     # Plot Frequency vs Magnitude (dB) - Left Top
     ax1 = fig.add_subplot(2, 2, 1)
-    ax1.plot(freq_GHz, mag_dB, 'o', markersize=3, label="Magnitude (dB)", color='blue')
+    ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Magnitude (dB)", alpha=1)
     ax1.set_xlabel("Frequency (GHz)")
     ax1.set_ylabel("Magnitude (dB)")
     ax1.set_title("Frequency vs Magnitude")
@@ -142,7 +141,7 @@ def Plot_Data(organized_data):
 
     # Plot Frequency vs Phase (degrees) - Left Bottom
     ax2 = fig.add_subplot(2, 2, 3)
-    ax2.plot(freq_GHz, phase_deg, 'o', markersize=3, label="Phase (deg)", color='orange')
+    ax2.scatter(freq_GHz, phase_deg, color='orange', s=50, marker='o', label="Phase (deg)", alpha=1)
     ax2.set_xlabel("Frequency (GHz)")
     ax2.set_ylabel("Phase (deg)")
     ax2.set_title("Frequency vs Phase")
@@ -152,7 +151,7 @@ def Plot_Data(organized_data):
 
     # Plot Real(S21) vs Imag(S21) - Right
     ax3 = fig.add_subplot(1, 2, 2)  # Ensures a single, right-side wide plot
-    ax3.plot(real_S21, imag_S21, 'o', markersize=3, label="S21 Complex Plane", color='green')
+    ax3.plot(real_S21, imag_S21, color='green', s=50, marker='o', label="S21 Complex Plane", alpha=1)
     ax3.set_xlabel("Real(S21)")
     ax3.set_ylabel("Imag(S21)")
     ax3.set_title("S21 Complex Plane")
@@ -553,11 +552,9 @@ print(f"In the folder: {folder_path}")
 print(f"Load data from: {file_name}")
 
 organized_data = Organize_Data(raw_data)
-Plot_Data(organized_data)
 tau_fit, phi0_fit = fit_cable_delay(organized_data)
 remove_cable_delay_data = remove_cable_delay(organized_data, tau_fit, phi0_fit)
 reorganized_data = remove_mag_bg(remove_cable_delay_data)
-Plot_Data(reorganized_data)
 
 guess_fc = find_fc(reorganized_data)
 guess_phi = find_phi(reorganized_data)
@@ -576,39 +573,71 @@ freq_Hz = reorganized_data[:, 0]  # Frequency in Hz
 mag_lin = reorganized_data[:, 1]  # Magnitude in linear scale
 phase_rad = reorganized_data[:, 2]  # Phase in radians
 
+freq_GHz = freq_Hz / 1e9
+mag_dB = 20 * np.log10(mag_lin) 
+phase_deg = np.rad2deg(phase_rad)
+
+# Calculate the center of fitted circle
 zc_fit_reorganized, r_fit_reorganized = find_circle(reorganized_data)
 xc_fit_reorganized = np.real(zc_fit_reorganized)
 yc_fit_reorganized = np.imag(zc_fit_reorganized)
-# Generate values for theta (0 to 2*pi)
-theta = np.linspace(0, 2 * np.pi, 100)
-# Parametric equation of the circle
+# Generate values for theta (0 to 2*pi) with the same number of freq_Hz
+theta = np.linspace(0, 2 * np.pi, len(freq_Hz))
 x = xc_fit_reorganized + r_fit_reorganized * np.cos(theta)
 y = yc_fit_reorganized + r_fit_reorganized * np.sin(theta)
+z = x + 1j * y
+mag_dB_fit = 20 * np.log10(np.abs(z)) 
+phase_deg_fit = np.rad2deg(np.angle(z))
 
-# Mark specific points with a different color and marker
+# Mark specific points with a different color and marker on reorganized data
 idx_fc = np.argmin(np.abs(reorganized_data[:,0] - guess_fc))
 S21 = mag_lin * np.exp(1j * phase_rad)
 S21_fc = S21[idx_fc]  # S21 value at resonance frequency
-plt.scatter(np.real(S21), np.imag(S21), color='blue', s=50, marker='o', label="Reorganized Data", alpha=1)
-plt.scatter(np.real(S21_fc), np.imag(S21_fc), color='orange', s=500, marker='*', zorder=5, label="Resonance")
-plt.plot(x, y, label="Fitted Circle", color="green")
 
-# Adding labels and title
-plt.xlabel("Re(S21)")
-plt.ylabel("Im(S21)")
-plt.title("Reorganized Data on Complex Plane with Marked Resonance")
+# Create figure
+fig = plt.figure(figsize=(10, 5))
 
+# Plot Frequency vs Magnitude (dB) - Left Top
+ax1 = fig.add_subplot(2, 2, 1)
+ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Magnitude", alpha=1)
+ax1.plot(freq_GHz, mag_dB_fit, label="Fitted Magnitude", color="green")
+ax1.set_xlabel("Frequency (GHz)")
+ax1.set_ylabel("Magnitude (dB)")
+ax1.set_title("Frequency vs Magnitude")
+ax1.grid(True)
+ax1.legend()
+ax1.set_xticks([np.min(freq_GHz), (np.min(freq_GHz)+np.max(freq_GHz))/2, np.max(freq_GHz)])
+
+# Plot Frequency vs Phase (degrees) - Left Bottom
+ax2 = fig.add_subplot(2, 2, 3)
+ax2.scatter(freq_GHz, phase_deg, color='orange', s=50, marker='o', label="Phase", alpha=1)
+ax2.plot(freq_GHz, phase_deg_fit, label="Fitted Phase", color="green")
+ax2.set_xlabel("Frequency (GHz)")
+ax2.set_ylabel("Phase (deg)")
+ax2.set_title("Frequency vs Phase")
+ax2.grid(True)
+ax2.legend()
+ax2.set_xticks([np.min(freq_GHz), (np.min(freq_GHz)+np.max(freq_GHz))/2, np.max(freq_GHz)])
+
+# Plot Real(S21) vs Imag(S21) - Right
+ax3 = fig.add_subplot(1, 2, 2)  # Ensures a single, right-side wide plot
+ax3.scatter(np.real(S21), np.imag(S21), color='green', s=50, marker='o', label="Reorganized Data", alpha=1)
+ax3.scatter(np.real(S21_fc), np.imag(S21_fc), color='orange', s=500, marker='*', zorder=5, label="Resonance")
+ax3.plot(x, y, label="Fitted Circle", color="green")
 # Adding dashed lines at x=1 and y=0
-plt.axvline(x=1, color='black', linestyle='--', label="x = 1 (Dashed Line)")
-plt.axhline(y=0, color='black', linestyle='--', label="y = 0 (Dashed Line)")
-
+ax3.axvline(x=1, color='black', linestyle='--', label=None)
+ax3.axhline(y=0, color='black', linestyle='--', label=None)
 # Plotting the gray line connecting the star and (1, 0)
-plt.plot([np.real(S21_fc), 1], [np.imag(S21_fc), 0], color='red', linestyle='-', linewidth=2, label="Connection Line")
+ax3.plot([np.real(S21_fc), 1], [np.imag(S21_fc), 0], color='red', linestyle='-', linewidth=2, label=None)
+ax3.set_xlabel("Real(S21)")
+ax3.set_ylabel("Imag(S21)")
+ax3.set_title("S21 Complex Plane")
+ax3.grid(True)
+ax3.legend()
+ax3.axis("equal")  # Ensures proper scaling of real/imag axes
 
-# Ensuring the x and y axes have the same scale
-plt.axis('equal')
-
-# Show the plot
+# Improve layout spacing
+plt.tight_layout()
 plt.show()
 
 # %% Start Fitting Using Initial Guessing
