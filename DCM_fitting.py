@@ -397,67 +397,65 @@ def find_Q(organized_data, plot=None):
         min_idx = np.argmin(mag_lin)  # Index of the resonance frequency
         fc = freq_Hz[min_idx]  # Resonance frequency
         
-        # Estimate background level (average of first & last point)
-        background = (mag_lin[0] + mag_lin[-1]) / 2
+        # Estimate background level using the maximum magnitude
+        background = np.max(mag_lin)  
 
         # Compute Half-Maximum Value
         half_mag_lin = background + (min_mag_lin - background) / 2
         
         # Interpolation function to find precise crossing points
-        f_interp = interp1d(mag_lin, freq_Hz, kind='linear', fill_value="extrapolate")
+        f_interp = interp1d(freq_Hz, mag_lin, kind='linear', fill_value="extrapolate")
 
         # Find indices where magnitude crosses the half-maximum value
         below_half_max = np.where(mag_lin <= half_mag_lin)[0]  # Indices of points below half-max
-        idx_lower, idx_upper = below_half_max[0], below_half_max[-1]
-        
-        # Get precise frequencies using interpolation
-        freq_lower = f_interp(half_mag_lin)
-        freq_upper = f_interp(half_mag_lin)
-        
+        idx_lower, idx_upper = below_half_max[-1], below_half_max[0]
+
+        # Get precise frequencies using linear interpolation
+        freq_lower = np.interp(half_mag_lin, [mag_lin[idx_lower], mag_lin[idx_lower + 1]], [freq_Hz[idx_lower], freq_Hz[idx_lower + 1]])
+        freq_upper = np.interp(half_mag_lin, [mag_lin[idx_upper - 1], mag_lin[idx_upper]], [freq_Hz[idx_upper - 1], freq_Hz[idx_upper]])
+
         # Compute Full Width at Half Maximum (FWHM)
         FWHM = abs(freq_upper - freq_lower)
         
-        return FWHM, idx_lower, idx_upper
+        return FWHM, freq_lower, freq_upper, idx_lower, idx_upper
 
-    FWHM, idx_lower, idx_upper = find_FWHM(freq_Hz, mag_lin)
+    FWHM, freq_lower, freq_upper, idx_lower, idx_upper = find_FWHM(freq_Hz, mag_lin)
         
     Q = fc / FWHM
 
     if plot:
         freq_GHz = freq_Hz / 1e9
+        mag_dB = 20 * np.log10(mag_lin)  # Convert to dB for clarity
+        
         plt.figure(figsize=(8, 6))
-        plt.plot(freq_GHz, mag_lin, color='black', linestyle='o', linewidth=2, label="Mag (lin)")
-        plt.scatter(freq_Hz[idx_lower] / 1e9, mag_lin[idx_lower], color='red', s=500, marker='*', zorder=5, label="freq_lower")
-        plt.scatter(freq_Hz[idx_upper] / 1e9, mag_lin[idx_upper], color='green', s=500, marker='*', zorder=5, label="freq_upper")
+        plt.scatter(freq_GHz, mag_dB, color='black', s=50, marker='o', label="Reorganized Data", alpha=1)
+        plt.scatter(freq_lower / 1e9, 20 * np.log10(mag_lin[idx_lower]), color='red', s=500, marker='*', zorder=5, label="freq_lower")
+        plt.scatter(freq_upper / 1e9, 20 * np.log10(mag_lin[idx_upper]), color='green', s=500, marker='*', zorder=5, label="freq_upper")
 
-        plt.xlabel("Freq (GHz)")
-        plt.ylabel("Mag (dB)")
-        plt.title("Freq vs Mag")
+        plt.xlabel("Frequency (GHz)")
+        plt.ylabel("Magnitude (dB)")
+        plt.title("Resonance Dip and FWHM")
         plt.grid(True)
-        plt.xticks([np.min(freq_GHz), (np.min(freq_GHz) + np.max(freq_GHz)) / 2, np.max(freq_GHz)])
+        plt.xticks(np.linspace(np.min(freq_GHz), np.max(freq_GHz), 5))
         plt.legend()
         plt.show()
 
     return Q
 
+#####################################################
+#### Input:                                      ####
+#### para 1 : organized_data                     ####
+#####################################################
+#### Output:                                     ####
+#### 1. coupling quality factor (Qc)             ####
+#####################################################
 print(f"Define find_Qc function...")
-def find_Qc(organized_data, guess_fc):
-    """
-    Function to find the coupling quality factor (Qc) :
-
-    Parameters:
-        organized_data:
-            - Column 0: Frequency in Hz
-            - Column 1: Magnitude in lin
-            - Column 2: Phase in rad
-        guess_fc : Initial guess for the resonance frequency (fc)
-    """
-    zc_fit, r_fit = find_circle(organized_data)
-    Q_over_absQc = 2 * r_fit
+def find_Qc(organized_data):
+    zc, d = find_circle(organized_data)
+    Q_over_absQc = d
     phi = find_phi(organized_data)
     Q_over_Qc = Q_over_absQc * np.cos(phi)
 
-    # Step (4): Compute Qc using Qc = Q / diameter
     Q = find_Q(organized_data)  # Compute Q using previously defined function
     Qc = Q / Q_over_Qc
 
@@ -473,7 +471,7 @@ def find_Qc(organized_data, guess_fc):
 ##############################################
 # Define folder path and file name separately
 folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_54_Line_2-NW_Ta2O5_3nm_01\raw_csv_files\Resonator_6_6p450GHz"
-file_name = r"NW_Ta2O5_3nm_01_6p450GHz_-90dBm_9mK_1.csv"
+file_name = r"NW_Ta2O5_3nm_01_6p450GHz_-90dBm_9mK.csv"
 
 # Combine folder path and file name
 file_path = os.path.join(folder_path, file_name)
@@ -487,58 +485,77 @@ print(f"Load data from: {file_name}")
 
 organized_data = Organize_Data(raw_data)
 Plot_Data(organized_data)
-tau_fit, phi0_fit = fit_cable_delay(organized_data)
-remove_cable_delay_data = remove_cable_delay(organized_data, tau_fit, phi0_fit)
+tau, alpha = fit_cable_delay(organized_data)
+remove_cable_delay_data = remove_cable_delay(organized_data, tau, alpha)
 reorganized_data = remove_mag_bg(remove_cable_delay_data)
 
 guess_fc = find_fc(reorganized_data)
 guess_phi = find_phi(reorganized_data)
-guess_Q = find_Q(organized_data, plot=None)
-guess_Qc = find_Qc(organized_data, guess_fc)
-print(f"Initial guess fc: {guess_fc/1e9:.4f} GHz")
+guess_Q = find_Q(reorganized_data, plot=False)
+guess_Qc = find_Qc(reorganized_data)
+print(f"Initial guess fc: {guess_fc / 1e9:.4f} GHz")
 print(f"Initial guess phi: {np.rad2deg(guess_phi):.4f} deg")
 print(f"Initial guess Q: {guess_Q/1e6:.4f} × 10\u2076")
 print(f"Initial guess Qc: {guess_Qc/1e6:.4f} x 10\u2076")
 print(f"==============================================")
 print(f"The infered internal quality factor (Qi): {(guess_Q*guess_Qc)/(guess_Qc-guess_Q)/1e6:.4f} x 10\u2076")
 
-# %% Draw the Initial Guessing Fitting
-# Mark fc on the Complex Plot
+# Draw the Initial Guessing Fitting
 freq_Hz = reorganized_data[:, 0]  # Frequency in Hz
 mag_lin = reorganized_data[:, 1]  # Magnitude in linear scale
 phase_rad = reorganized_data[:, 2]  # Phase in radians
+
+S21 = mag_lin * np.exp(1j * phase_rad)
+S21_real = np.real(S21)
+S21_imag = np.imag(S21)
 
 freq_GHz = freq_Hz / 1e9
 mag_dB = 20 * np.log10(mag_lin) 
 phase_deg = np.rad2deg(phase_rad)
 
-# Calculate the center of fitted circle
-zc_fit_reorganized, r_fit_reorganized = find_circle(reorganized_data)
-xc_fit_reorganized = np.real(zc_fit_reorganized)
-yc_fit_reorganized = np.imag(zc_fit_reorganized)
-# Generate values for theta (0 to 2*pi) with the same number of freq_Hz
+# Draw the fitted curve
+zc, d = find_circle(reorganized_data)
 theta = np.linspace(0, 2 * np.pi, len(freq_Hz))
-x = xc_fit_reorganized + r_fit_reorganized * np.cos(theta)
-y = yc_fit_reorganized + r_fit_reorganized * np.sin(theta)
-z = x + 1j * y
-mag_dB_fit = 20 * np.log10(np.abs(z)) 
-phase_deg_fit = np.rad2deg(np.angle(z))
+z = zc + d / 2 * np.exp(1j * theta) * np.exp(-1j * guess_phi)
+x = np.real(z)
+y = np.imag(z)
+mag_lin_fit = np.abs(z)
+mag_dB_fit = 20 * np.log10(mag_lin_fit)
+phase_rad_fit = np.angle(z) 
+phase_deg_fit = np.rad2deg(phase_rad_fit)
+# Assuming z_fc is defined as the resonance point
+z_fc = 1 + (zc - 1) * 2
+x_fc = np.real(z_fc)
+y_fc = np.imag(z_fc)
 
-# Mark specific points with a different color and marker on reorganized data
-idx_fc = np.argmin(np.abs(reorganized_data[:,0] - guess_fc))
-S21 = mag_lin * np.exp(1j * phase_rad)
-S21_fc = S21[idx_fc]  # S21 value at resonance frequency
+# Function to calculate the Euclidean distance between two points
+def distance(x1, y1, x2, y2):
+    return np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+# Find the closest point to z_fc
+distances = [distance(xi, yi, x_fc, y_fc) for xi, yi in zip(x, y)]
+# Get the index of the closest point
+closest_index = np.argmin(distances)
+# Get the frequency corresponding to the closest point
+fc_Hz = organized_data[closest_index, 0]
+fc_GHz = fc_Hz / 1e9
+
+mag_lin_fc_fit = np.abs(z_fc)
+mag_dB_fc_fit = 20 * np.log10(mag_lin_fc_fit)
+
+phase_rad_fc_fit = np.angle(z_fc)
+phase_deg_fc_fit = np.rad2deg(phase_rad_fc_fit)
 
 # Create figure
 fig = plt.figure(figsize=(10, 5))
 
 # Plot Frequency vs Magnitude (dB) - Left Top
 ax1 = fig.add_subplot(2, 2, 1)
-ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Magnitude", alpha=1)
-ax1.plot(freq_GHz, mag_dB_fit, label="Fitted Magnitude", color="green")
-ax1.set_xlabel("Frequency (GHz)")
-ax1.set_ylabel("Magnitude (dB)")
-ax1.set_title("Frequency vs Magnitude")
+ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Mag", alpha=1)
+ax1.scatter(fc_GHz, mag_dB_fc_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
+ax1.plot(freq_GHz, mag_dB_fit, label="Fitted Mag", color="green")
+ax1.set_xlabel("Freq (GHz)")
+ax1.set_ylabel("Mag (dB)")
+ax1.set_title("Freq vs Mag")
 ax1.grid(True)
 ax1.legend()
 ax1.set_xticks([np.min(freq_GHz), (np.min(freq_GHz)+np.max(freq_GHz))/2, np.max(freq_GHz)])
@@ -546,6 +563,7 @@ ax1.set_xticks([np.min(freq_GHz), (np.min(freq_GHz)+np.max(freq_GHz))/2, np.max(
 # Plot Frequency vs Phase (degrees) - Left Bottom
 ax2 = fig.add_subplot(2, 2, 3)
 ax2.scatter(freq_GHz, phase_deg, color='orange', s=50, marker='o', label="Phase", alpha=1)
+ax2.scatter(fc_GHz, phase_deg_fc_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
 ax2.plot(freq_GHz, phase_deg_fit, label="Fitted Phase", color="green")
 ax2.set_xlabel("Frequency (GHz)")
 ax2.set_ylabel("Phase (deg)")
@@ -556,14 +574,14 @@ ax2.set_xticks([np.min(freq_GHz), (np.min(freq_GHz)+np.max(freq_GHz))/2, np.max(
 
 # Plot Real(S21) vs Imag(S21) - Right
 ax3 = fig.add_subplot(1, 2, 2)  # Ensures a single, right-side wide plot
-ax3.scatter(np.real(S21), np.imag(S21), color='green', s=50, marker='o', label="Reorganized Data", alpha=1)
-ax3.scatter(np.real(S21_fc), np.imag(S21_fc), color='orange', s=500, marker='*', zorder=5, label="Resonance")
+ax3.scatter(S21_real, S21_imag, color='green', s=50, marker='o', label="Reorganized Data", alpha=1)
+ax3.scatter(x_fc, y_fc, color='red', s=500, marker='*', zorder=5, label="Resonance")
 ax3.plot(x, y, label="Fitted Circle", color="green")
 # Adding dashed lines at x=1 and y=0
 ax3.axvline(x=1, color='black', linestyle='--', label=None)
 ax3.axhline(y=0, color='black', linestyle='--', label=None)
 # Plotting the gray line connecting the star and (1, 0)
-ax3.plot([np.real(S21_fc), 1], [np.imag(S21_fc), 0], color='red', linestyle='-', linewidth=2, label=None)
+ax3.plot([np.real(z_fc), 1], [np.imag(z_fc), 0], color='red', linestyle='-', linewidth=2, label=None)
 ax3.set_xlabel("Real(S21)")
 ax3.set_ylabel("Imag(S21)")
 ax3.set_title("S21 Complex Plane")
