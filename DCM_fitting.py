@@ -254,29 +254,29 @@ def remove_mag_bg(organized_data):
 #### 1. Correct the phase   ####
 #### 2. Correct the mag     ####
 ################################ 
-# Define folder path and file name separately
-folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_4-Tony_Ta_NbSi_03\Resonator_3_5p863GHz"
-file_name = r"Tony_Ta_NbSi_03_5p863GHz_-90dBm_-1000mK.csv"
+# # Define folder path and file name separately
+# folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_4-Tony_Ta_NbSi_03\Resonator_3_5p863GHz"
+# file_name = r"Tony_Ta_NbSi_03_5p863GHz_-90dBm_-1000mK.csv"
 
-# Combine folder path and file name
-file_path = os.path.join(folder_path, file_name)
+# # Combine folder path and file name
+# file_path = os.path.join(folder_path, file_name)
 
-# Load data
-raw_data = pd.read_csv(file_path)
+# # Load data
+# raw_data = pd.read_csv(file_path)
 
-# Print confirmation
-print(f"In the folder: {folder_path}")
-print(f"Load data from: {file_name}")
+# # Print confirmation
+# print(f"In the folder: {folder_path}")
+# print(f"Load data from: {file_name}")
 
-organized_data = Organize_Data(raw_data)
-Plot_Data(organized_data)
+# organized_data = Organize_Data(raw_data)
+# Plot_Data(organized_data)
 
-tau_fit, phi0_fit = fit_cable_delay(organized_data)
-remove_cable_delay_data = remove_cable_delay(organized_data, tau_fit, phi0_fit)
-Plot_Data(remove_cable_delay_data)
+# tau_fit, phi0_fit = fit_cable_delay(organized_data)
+# remove_cable_delay_data = remove_cable_delay(organized_data, tau_fit, phi0_fit)
+# Plot_Data(remove_cable_delay_data)
 
-remove_mag_bg_data = remove_mag_bg(remove_cable_delay_data)
-Plot_Data(remove_mag_bg_data)
+# remove_mag_bg_data = remove_mag_bg(remove_cable_delay_data)
+# Plot_Data(remove_mag_bg_data)
 
 # %% Initial Guessing
 #####################################################
@@ -290,39 +290,38 @@ Plot_Data(remove_mag_bg_data)
 #### 4. coupling quality factor (Qc)             ####
 #####################################################
 print(f"Define find_circle finctino...")
-def find_circle(organized_data):
-    """
-    Function to finds the center (zc), diameter (d) of the circle:
-    1. center (zc).
-    2. diameter (d).
 
-    Parameters:
-    1. organized_data (numpy array): N×3 matrix containing:
-        - Column 1: Frequency in Hz
-        - Column 2: Magnitude in lin
-        - Column 3: Phase in rad
-    """
+#####################################################
+#### Input:                                      ####
+#### para 1 : reorganized_data                   ####
+#####################################################
+#### Output:                                     ####
+#### 1. center (zc)                              ####
+#### 2. diameter (d)                             ####
+#####################################################
+def find_circle(organized_data):
     # Extract frequency, magnitude, and phase from organized data
     freq_Hz = organized_data[:, 0]  # frequency in Hz
     mag_lin = organized_data[:, 1]  # magnitude in lin
-    phase_rad = organized_data[:, 2]  # magnitude in lin
+    phase_rad = organized_data[:, 2]  # phase in rad
 
     # Calculate S21
     S21 = mag_lin * np.exp(1j * phase_rad)
     
     x = np.real(S21)
     y = np.imag(S21)
-    # Define the circle equation: (x - x0)^2 + (y - y0)^2 = r^2
+
+    # Define the circle equation: (x - xc)^2 + (y - yc)^2 = r^2
     def circle_equation(params, x, y): 
         xc, yc, r = params
         return (x - xc)**2 + (y - yc)**2 - r**2
 
-    # Initial guess for the center (x0, y0) and radius (r)
+    # Initial guess for the center (xc, yc) and radius (r)
     xc_guess = np.mean(x)
     yc_guess = np.mean(y)
     r_guess = np.mean(np.sqrt((x - xc_guess)**2 + (y - yc_guess)**2))
     
-    # Initial parameter guess: [x0, y0, r]
+    # Initial parameter guess: [xc, yc, r]
     initial_guess = [xc_guess, yc_guess, r_guess]
     
     # Perform the least squares fitting
@@ -500,6 +499,7 @@ print(f"In the folder: {folder_path}")
 print(f"Load data from: {file_name}")
 
 organized_data = Organize_Data(raw_data)
+Plot_Data(organized_data)
 tau_fit, phi0_fit = fit_cable_delay(organized_data)
 remove_cable_delay_data = remove_cable_delay(organized_data, tau_fit, phi0_fit)
 reorganized_data = remove_mag_bg(remove_cable_delay_data)
