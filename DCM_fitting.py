@@ -281,18 +281,7 @@ def remove_mag_bg(organized_data):
 # %% Initial Guessing
 #####################################################
 #### Input:                                      ####
-#### para 1 : reorganized_data                   ####
-#####################################################
-#### Output: Initial Guessing Fitting Parameters ####
-#### 1. resonance frequency (fc)                 ####
-#### 2. mismatch phase (phi)                     ####
-#### 3. loaded quality factor (Q)                ####
-#### 4. coupling quality factor (Qc)             ####
-#####################################################
-
-#####################################################
-#### Input:                                      ####
-#### para 1 : reorganized_data                   ####
+#### para 1 : organized_data                     ####
 #####################################################
 #### Output:                                     ####
 #### 1. center (zc)                              ####
@@ -336,7 +325,7 @@ def find_circle(organized_data):
 
 #####################################################
 #### Input:                                      ####
-#### para 1 : reorganized_data                   ####
+#### para 1 : organized_data                     ####
 #####################################################
 #### Output:                                     ####
 #### 1. Resonance frequency (fc) in Hz           ####
@@ -372,23 +361,19 @@ def find_fc(organized_data):
 
     return fc
 
+#####################################################
+#### Input:                                      ####
+#### para 1 : organized_data                     ####
+#####################################################
+#### Output:                                     ####
+#### 1. phase mismatch (phi) in rad              ####
+#####################################################
 print(f"Define find_phi function...")
 def find_phi(organized_data):
-    """
-    Function to finds the phase mismatch (phi):
-    1. phi mismatch (phi) in rad.
-
-    Parameters:
-    1. organized_data : N×3 matrix containing:
-        - Column 1: Frequency in Hz
-        - Column 2: Magnitude in lin
-        - Column 3: Phase in rad
-    2. guess_fc: Estimated resonance frequency (Hz)
-    """
-    zc, r = find_circle(organized_data)
-
-    phi = np.pi - np.angle(zc - 1)  # Phase of (S21_fc - (1+0j)) in rad
+    zc, d = find_circle(organized_data)
+    phi = np.angle(1 - zc)  # Phase of ((1+0j) - S21_fc) in rad
     return -phi
+
 
 print(f"Define find_Q function...")
 def find_Q(organized_data, plot=None):
