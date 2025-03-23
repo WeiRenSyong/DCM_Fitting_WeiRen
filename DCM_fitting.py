@@ -217,41 +217,36 @@ def remove_cable_delay(organized_data, tau, alpha):
 #######################################
 print(f"Define remove_mag_bg function...")
 def remove_mag_bg(organized_data):
-    
     print(f"Preprocess the background mag removal...")
-    
     # Extract values for plotting
     freq_Hz = organized_data[:, 0]
-    mag_linear = organized_data[:, 1]
+    mag_lin = organized_data[:, 1]
     phase_rad = organized_data[:, 2]
-
-    # Unwrap phase to prevent discontinuities
-    # phase_rad = np.unwrap(np.angle(phase_rad))  
 
     # Select the wings first and last few points
     num_points = 2  # Number of points to use from each wing
     freq_bg = np. concatenate((freq_Hz[:num_points], freq_Hz[-num_points:]))
-    mag_bg = np.concatenate((mag_linear[:num_points], mag_linear[-num_points:]))
+    mag_bg = np.concatenate((mag_lin[:num_points], mag_lin[-num_points:]))
 
     # Perform linear fit to get A(slope) and B (offset)
     q = np.polyfit(freq_bg, mag_bg, 1)    # Linear fit (degree = 1)
 
     # Define the background to substrate (Ax + B)
-    background_mag = np.polyval(q, freq_Hz)
+    mag_bg = np.polyval(q, freq_Hz)
 
-    z = mag_linear * np.exp(1j * phase_rad)
+    z = mag_lin * np.exp(1j * phase_rad)
     # Remove the background mag
-    z_corrected = z / background_mag  # Multiply by exp(+j*phase) to correct
+    z_corrected = z / mag_bg
 
     # Arrange z_corrected     
     freq_Hz = freq_Hz
-    mag_linear = np.abs(z_corrected)
+    mag_lin = np.abs(z_corrected)
     phase_rad = np.angle(z_corrected)
 
     # Stack the processed data
-    remove_mag_bg_data = np.column_stack((freq_Hz, mag_linear, phase_rad))
+    reorganized_data = np.column_stack((freq_Hz, mag_lin, phase_rad))
 
-    return remove_mag_bg_data
+    return reorganized_data
 
 # %% Set a Testing Point - Check the complex circle after removing environment factors
 ################################
