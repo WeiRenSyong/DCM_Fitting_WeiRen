@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
+from scipy.interpolate import interp1d
 
 # %% Define Some Useful Functions
 ######################################
@@ -353,7 +354,7 @@ def find_fc(organized_data):
         return np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
     
     # Find the closest point to z_fc
-    distances = [distance(xi, yi, np.real(z_fc), np.imag(z_fc) for xi, yi in zip(x, y)]
+    distances = [distance(xi, yi, np.real(z_fc), np.imag(z_fc)) for xi, yi in zip(x, y)]
     # Get the index of the closest point
     closest_index = np.argmin(distances)
     # Get the frequency corresponding to the closest point
@@ -374,42 +375,48 @@ def find_phi(organized_data):
     phi = np.angle(1 - zc)  # Phase of ((1+0j) - S21_fc) in rad
     return -phi
 
-
+#####################################################
+#### Input:                                      ####
+#### para 1 : organized_data                     ####
+#####################################################
+#### Output:                                     ####
+#### 1. quality factor (Q) = fc / FWHM           ####
+#####################################################
 print(f"Define find_Q function...")
 def find_Q(organized_data, plot=None):
-    """
-    Function to find the quality factor (Q) = fc / FWHM:
-
-    Parameters:
-    1. organized_data : N×3 matrix containing:
-        - Column 1: Frequency in Hz
-        - Column 2: Magnitude in lin
-        - Column 3: Phase in rad
-    """
     fc = find_fc(organized_data)
-    
+
     # Extract frequency and magnitude
     freq_Hz = organized_data[:, 0]  # frequency in Hz
     mag_lin = organized_data[:, 1]  # magnitude in lin
+    phase_rad = organized_data[:, 2] # phase in rad
 
     def find_FWHM(freq_Hz, mag_lin):
-        # Find the minimum of the magnitude (resonance dip)
+        # Find the minimum magnitude (resonance dip)
         min_mag_lin = np.min(mag_lin)
-        background = (mag_lin[0] + mag_lin[-1]) / 2
+        min_idx = np.argmin(mag_lin)  # Index of the resonance frequency
+        fc = freq_Hz[min_idx]  # Resonance frequency
         
-        # Half of the minimum magnitude (assuming resonance dip)
+        # Estimate background level (average of first & last point)
+        background = (mag_lin[0] + mag_lin[-1]) / 2
+
+        # Compute Half-Maximum Value
         half_mag_lin = background + (min_mag_lin - background) / 2
         
-        # Find the indices where the magnitude crosses the half maximum value
-        idx_upper = np.where(mag_lin <= half_mag_lin)[0][0]  # First index at or below half max
-        idx_lower = np.where(mag_lin <= half_mag_lin)[0][-1]  # Last index at or below half max
+        # Interpolation function to find precise crossing points
+        f_interp = interp1d(mag_lin, freq_Hz, kind='linear', fill_value="extrapolate")
+
+        # Find indices where magnitude crosses the half-maximum value
+        below_half_max = np.where(mag_lin <= half_mag_lin)[0]  # Indices of points below half-max
+        idx_lower, idx_upper = below_half_max[0], below_half_max[-1]
         
-        # Get the frequencies at these indices
-        freq_upper = freq_Hz[idx_upper]
-        freq_lower = freq_Hz[idx_lower]
+        # Get precise frequencies using interpolation
+        freq_lower = f_interp(half_mag_lin)
+        freq_upper = f_interp(half_mag_lin)
         
-        # FWHM is the difference between the frequencies at the half maximum
-        FWHM = freq_upper - freq_lower
+        # Compute Full Width at Half Maximum (FWHM)
+        FWHM = abs(freq_upper - freq_lower)
+        
         return FWHM, idx_lower, idx_upper
 
     FWHM, idx_lower, idx_upper = find_FWHM(freq_Hz, mag_lin)
@@ -419,13 +426,13 @@ def find_Q(organized_data, plot=None):
     if plot:
         freq_GHz = freq_Hz / 1e9
         plt.figure(figsize=(8, 6))
-        plt.plot(freq_GHz, mag_lin, color='black', linestyle='-', linewidth=2, label="mag_lin")
+        plt.plot(freq_GHz, mag_lin, color='black', linestyle='o', linewidth=2, label="Mag (lin)")
         plt.scatter(freq_Hz[idx_lower] / 1e9, mag_lin[idx_lower], color='red', s=500, marker='*', zorder=5, label="freq_lower")
         plt.scatter(freq_Hz[idx_upper] / 1e9, mag_lin[idx_upper], color='green', s=500, marker='*', zorder=5, label="freq_upper")
 
-        plt.xlabel("Frequency (GHz)")
-        plt.ylabel("Magnitude (dB)")
-        plt.title("Frequency vs Magnitude")
+        plt.xlabel("Freq (GHz)")
+        plt.ylabel("Mag (dB)")
+        plt.title("Freq vs Mag")
         plt.grid(True)
         plt.xticks([np.min(freq_GHz), (np.min(freq_GHz) + np.max(freq_GHz)) / 2, np.max(freq_GHz)])
         plt.legend()
