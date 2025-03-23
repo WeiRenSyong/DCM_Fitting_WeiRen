@@ -455,7 +455,6 @@ def find_Qc(organized_data):
     Q_over_absQc = d
     phi = find_phi(organized_data)
     Q_over_Qc = Q_over_absQc * np.cos(phi)
-
     Q = find_Q(organized_data)  # Compute Q using previously defined function
     Qc = Q / Q_over_Qc
 
@@ -470,8 +469,8 @@ def find_Qc(organized_data):
 #### 4. find coupling quality factor (Qc) ####
 ##############################################
 # Define folder path and file name separately
-folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_54_Line_2-NW_Ta2O5_3nm_01\raw_csv_files\Resonator_6_6p450GHz"
-file_name = r"NW_Ta2O5_3nm_01_6p450GHz_-90dBm_9mK.csv"
+folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_57_Line_4-Tony_Ta_NbSi_03\most_recent_data\Resonator_3_5p863GHz"
+file_name = r"Tony_Ta_NbSi_03_5p863GHz_-87dBm_-1000mK.csv"
 
 # Combine folder path and file name
 file_path = os.path.join(folder_path, file_name)
@@ -493,7 +492,7 @@ guess_fc = find_fc(reorganized_data)
 guess_phi = find_phi(reorganized_data)
 guess_Q = find_Q(reorganized_data, plot=False)
 guess_Qc = find_Qc(reorganized_data)
-print(f"Initial guess fc: {guess_fc / 1e9:.4f} GHz")
+print(f"Initial guess fc: {guess_fc / 1e9:.8f} GHz")
 print(f"Initial guess phi: {np.rad2deg(guess_phi):.4f} deg")
 print(f"Initial guess Q: {guess_Q/1e6:.4f} × 10\u2076")
 print(f"Initial guess Qc: {guess_Qc/1e6:.4f} x 10\u2076")
