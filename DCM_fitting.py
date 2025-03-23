@@ -470,7 +470,7 @@ def find_Qc(organized_data):
 ##############################################
 # Define folder path and file name separately
 folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_57_Line_4-Tony_Ta_NbSi_03\most_recent_data\Resonator_3_5p863GHz"
-file_name = r"Tony_Ta_NbSi_03_5p863GHz_-87dBm_-1000mK.csv"
+file_name = r"Tony_Ta_NbSi_03_5p863GHz_-30dBm_-1000mK.csv"
 
 # Combine folder path and file name
 file_path = os.path.join(folder_path, file_name)
@@ -593,3 +593,55 @@ plt.tight_layout()
 plt.show()
 
 # %% Start Fitting Using Initial Guessing
+# Initial guesses
+initial_fc = guess_fc
+initial_Q = guess_Q
+initial_Qc = guess_Qc
+initial_phi = guess_phi
+
+# Extract data
+freq_Hz = reorganized_data[:, 0]  # Frequency in Hz
+mag_lin = reorganized_data[:, 1]  # Magnitude in linear scale
+phase_rad = reorganized_data[:, 2]  # Phase in radians
+
+# Convert S21 data to complex form
+S21 = mag_lin * np.exp(1j * phase_rad)
+
+def S21_residuals(params, freq_Hz, S21):
+    fc, Q, Qc, phi = params  # Unpacking parameters
+    model_S21 = 1 - (Q / Qc) * np.exp(1j * phi) / (1 + 2j * Q * (freq_Hz / fc - 1))
+    return np.concatenate([np.real(S21 - model_S21), np.imag(S21 - model_S21)])  # Return real & imag residuals
+
+def fit_S21(freq_Hz, S21, initial_fc, initial_Q, initial_Qc, initial_phi):
+    # Initial parameter guesses
+    params_init = [initial_fc, initial_Q, initial_Qc, initial_phi]
+
+    # Perform least squares optimization
+    result = opt.least_squares(S21_residuals, params_init, args=(freq_Hz, S21), jac='3-point')
+
+    # Extract fitted parameters
+    fc_fit, Q_fit, Qc_fit, phi_fit = result.x
+
+    # Compute parameter uncertainties using the covariance matrix
+    J = result.jac  # Jacobian matrix
+    cov_matrix = np.linalg.inv(J.T @ J)  # Covariance matrix estimation
+
+    # Standard deviation of fitted parameters (square root of diagonal elements)
+    sigma_fc, sigma_Q, sigma_Qc, sigma_phi = np.sqrt(np.diag(cov_matrix))
+
+    # Error propagation for Qi: Qi = (Q * Qc) / (Qc - Q)
+    Qi_fit = (Q_fit * Qc_fit) / (Qc_fit - Q_fit)
+    sigma_Qi = Qi_fit * np.sqrt((sigma_Q / Q_fit)**2 + (sigma_Qc / Qc_fit)**2)
+
+    return fc_fit, sigma_fc, Q_fit, sigma_Q, Qc_fit, sigma_Qc, phi_fit, sigma_phi, Qi_fit, sigma_Qi
+
+# Perform fitting
+fc_fit, sigma_fc, Q_fit, sigma_Q, Qc_fit, sigma_Qc, phi_fit, sigma_phi, Qi_fit, sigma_Qi = fit_S21(freq_Hz, S21, initial_fc, initial_Q, initial_Qc, initial_phi)
+
+# Print results in the requested format
+print(f"==============================================")
+print(f"Fitted fc: {fc_fit / 1e9:.6f} ± {sigma_fc / 1e9:.6f} GHz")
+print(f"Fitted Q: {Q_fit / 1e6:.4f} ± {sigma_Q / 1e6:.4f} x 10\u2076")
+print(f"Fitted Qc: {Qc_fit / 1e6:.4f} ± {sigma_Qc / 1e6:.4f} x 10\u2076")
+print(f"Fitted phi: {phi_fit:.4f} ± {sigma_phi:.4f} rad")
+print(f"Inferred Qi: {Qi_fit / 1e6:.4f} ± {sigma_Qi / 1e6:.4f} x 10\u2076")
