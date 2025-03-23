@@ -20,29 +20,18 @@ import scipy.optimize as opt
 ######################################
 print(f"Define Organize_Date function...")
 def Organize_Data(raw_data):
-    """
-    Function to organize raw data to:
-        - Column 1 : Frequency in Hz
-        - Column 2 : Magnitude in linear
-        - Column 3 : Phase in radians
-
-    Parameters:
-        raw_data (numpy array): N×3 (Nx4) matrix containing:
-            - (Column 1: Time)
-            - Column 1: Frequency in Hz
-            - Column 2: Magnitude in dB
-            - Column 3: Phase in degrees
-    """
     # Ensure the input is a NumPy array
     raw_data = np.array(raw_data, dtype=str)
 
     # Check if the raw_data has an extra time column (4 columns instead of 3)
-    if raw_data.shape[1] == 4:
-        raw_data = raw_data[:, 1:]  # Ignore the first column (time column)
-        print('The raw data are Nx4 matrix.')
-    else:
+    if raw_data.shape[1] == 3:
         print('The raw data are Nx3 matrix.')
-
+    elif raw_data.shape[1] == 4:
+        print('The raw data are Nx4 matrix.')
+        raw_data = raw_data[:, 1:]  # Ignore the first column (time column)
+    else:
+        print('Please check the raw data due to worng format.')
+    
     # Convert each column to numeric values, removing non-numeric rows
     freq, mag, phase = [], [], []
     for column in raw_data:
@@ -67,9 +56,9 @@ def Organize_Data(raw_data):
 
     # Convert magnitude from dB to linear scale
     if np.min(mag) < 0: # If min mag < 0, assume dB
-        mag_linear = 10 ** (mag / 20)   # The reading of the VNA is a ratio of voltage, so 20 is here
+        mag_lin = 10 ** (mag / 20)   # The reading of the VNA is a ratio of voltage, so 20 is here
     else:
-        mag_linear = mag
+        mag_lin = mag
 
     # Convert phase to radians if in degrees
     if np.max(np.abs(phase)) > 2 * np.pi:  # If max phase > 2π, assume degrees
@@ -78,7 +67,7 @@ def Organize_Data(raw_data):
         phase_rad = phase
 
     # Stack the processed data
-    organized_data = np.column_stack((freq_Hz, mag_linear, phase_rad))
+    organized_data = np.column_stack((freq_Hz, mag_lin, phase_rad))
 
     return organized_data
 
@@ -123,8 +112,8 @@ def Plot_Data(organized_data):
     
     # Compute real and imaginary parts of S21
     S21 = mag_linear * np.exp(1j * phase_rad)
-    real_S21 = S21.real
-    imag_S21 = S21.imag
+    real_S21 = np.real(S21)
+    imag_S21 = np.imag(S21)
 
     # Create figure
     fig = plt.figure(figsize=(10, 5))
@@ -301,34 +290,34 @@ def remove_mag_bg(organized_data):
     return remove_mag_bg_data
 
 # %% Set a Testing Point - Check the complex circle after removing environment factors
-# ################################
-# #### Use to be a Test Point ####
-# #### 1. Correct the phase   ####
-# #### 2. Correct the mag     ####
-# ################################ 
-# # Define folder path and file name separately
-# folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_4-Tony_Ta_NbSi_03\Resonator_3_5p863GHz"
-# file_name = r"Tony_Ta_NbSi_03_5p863GHz_-90dBm_-1000mK.csv"
+################################
+#### Use to be a Test Point ####
+#### 1. Correct the phase   ####
+#### 2. Correct the mag     ####
+################################ 
+# Define folder path and file name separately
+folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_4-Tony_Ta_NbSi_03\Resonator_3_5p863GHz"
+file_name = r"Tony_Ta_NbSi_03_5p863GHz_-90dBm_-1000mK.csv"
 
-# # Combine folder path and file name
-# file_path = os.path.join(folder_path, file_name)
+# Combine folder path and file name
+file_path = os.path.join(folder_path, file_name)
 
-# # Load data
-# raw_data = pd.read_csv(file_path)
+# Load data
+raw_data = pd.read_csv(file_path)
 
-# # Print confirmation
-# print(f"In the folder: {folder_path}")
-# print(f"Load data from: {file_name}")
+# Print confirmation
+print(f"In the folder: {folder_path}")
+print(f"Load data from: {file_name}")
 
-# organized_data = Organize_Data(raw_data)
-# Plot_Data(organized_data)
+organized_data = Organize_Data(raw_data)
+Plot_Data(organized_data)
 
-# tau_fit, phi0_fit = fit_cable_delay(organized_data)
-# remove_cable_delay_data = remove_cable_delay(organized_data, tau_fit, phi0_fit)
-# Plot_Data(remove_cable_delay_data)
+tau_fit, phi0_fit = fit_cable_delay(organized_data)
+remove_cable_delay_data = remove_cable_delay(organized_data, tau_fit, phi0_fit)
+Plot_Data(remove_cable_delay_data)
 
-# remove_mag_bg_data = remove_mag_bg(remove_cable_delay_data)
-# Plot_Data(remove_mag_bg_data)
+remove_mag_bg_data = remove_mag_bg(remove_cable_delay_data)
+Plot_Data(remove_mag_bg_data)
 
 # %% Initial Guessing
 #####################################################
@@ -538,8 +527,8 @@ def find_Qc(organized_data, guess_fc):
 #### 4. find coupling quality factor (Qc) ####
 ##############################################
 # Define folder path and file name separately
-folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_4-Tony_Ta_NbSi_03\Resonator_3_5p863GHz"
-file_name = r"Tony_Ta_NbSi_03_5p863GHz_-90dBm_-1000mK.csv"
+folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_54_Line_2-NW_Ta2O5_3nm_01\raw_csv_files\Resonator_6_6p450GHz"
+file_name = r"NW_Ta2O5_3nm_01_6p450GHz_-90dBm_9mK_1.csv"
 
 # Combine folder path and file name
 file_path = os.path.join(folder_path, file_name)
