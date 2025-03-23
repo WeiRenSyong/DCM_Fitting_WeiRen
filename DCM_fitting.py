@@ -184,40 +184,28 @@ def fit_cable_delay(organized_data):
 #######################################
 print(f"Define remove_cable_delay function...")
 def remove_cable_delay(organized_data, tau, alpha):
-    """
-    Function to finds the cable delay to remove the slope of the phase response:
-    1. z_corrected : Complex-valued data after removing the cable delay.
-
-    Parameters:
-    1. organized_data (numpy array): N×3 matrix containing:
-        - Column 1: Frequency in Hz
-        - Column 2: Magnitude in linear
-        - Column 3: Phase in radians
-    2. tau_fit, phi0_fit
-    """
-
     print(f"Preprocess the phase correction...")
     # Extract values for plotting
     freq_Hz = organized_data[:, 0]
-    mag_linear = organized_data[:, 1]
+    mag_lin = organized_data[:, 1]
     phase_rad = organized_data[:, 2]
 
     # Compute the background phase caused by cable delay
-    background_phase = -2 * np.pi * freq_Hz * tau - alpha # in radians
+    phase_bg = -2 * np.pi * freq_Hz * tau + alpha # in rad
 
-    z = mag_linear * np.exp(1j * phase_rad)
+    z = mag_lin * np.exp(1j * phase_rad)
     # Remove the background phase
-    z_corrected = z * np.exp(1j * background_phase)  # Multiply by exp(+j*phase) to correct
+    z_corrected = z * np.exp(-1j * phase_bg)  # Multiply by exp(+j*phase) to correct
 
     # Arrange z_corrected     
     freq_Hz = freq_Hz
-    mag_linear = np.abs(z_corrected)
+    mag_lin = np.abs(z_corrected)
     phase_rad = np.angle(z_corrected)
 
     # Stack the processed data
-    remove_cable_delay_organized_data = np.column_stack((freq_Hz, mag_linear, phase_rad))
+    reorganized_data = np.column_stack((freq_Hz, mag_lin, phase_rad))
 
-    return remove_cable_delay_organized_data
+    return reorganized_data
 
 #%% Preprocessing (2) - remove_mg_bg
 #######################################
