@@ -468,8 +468,8 @@ def find_Qc(organized_data):
 #### 4. find coupling quality factor (Qc) ####
 ##############################################
 # Define folder path and file name separately
-folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_5-NW_Ta2O5_15nm_01\2024_10_18_Final_Organized_Data\All_csv_raw_data_and_fitting_results\Resonator_0_5p750GHz"
-file_name = r"NW_Ta2O5_15nm_01_5p750GHz_-30dBm_-1000mK.csv"
+folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_4-Tony_Ta_NbSi_03\Resonator_0_5p734GHz"
+file_name = r"Tony_Ta_NbSi_03_5p734GHz_-84dBm_-1000mK.csv"
 
 # Combine folder path and file name
 file_path = os.path.join(folder_path, file_name)
@@ -491,12 +491,11 @@ guess_fc = find_fc(reorganized_data)
 guess_phi = find_phi(reorganized_data)
 guess_Q = find_Q(reorganized_data, plot=False)
 guess_Qc = find_Qc(reorganized_data)
-print(f"Initial guess fc: {guess_fc / 1e9:.8f} GHz")
-print(f"Initial guess phi: {np.rad2deg(guess_phi):.4f} deg")
 print(f"Initial guess Q: {guess_Q/1e6:.4f} × 10\u2076")
-print(f"Initial guess Qc: {guess_Qc/1e6:.4f} x 10\u2076")
-print(f"==============================================")
 print(f"The infered internal quality factor (Qi): {(1 / guess_Q - 1 / guess_Qc) **(-1) / 1e6:.4f} x 10\u2076")
+print(f"Initial guess |Qc|: {guess_Qc/1e6:.4f} x 10\u2076")
+print(f"Initial guess phi: {np.rad2deg(-guess_phi):.4f} deg")
+print(f"Initial guess fc: {guess_fc / 1e9:.9f} GHz")
 
 # Draw the Initial Guessing Fitting
 def Plot_Fit_Data(organized_data):
@@ -588,55 +587,165 @@ def Plot_Fit_Data(organized_data):
 Plot_Fit_Data(reorganized_data)
 
 # %% Start Fitting Using Initial Guessing
-# Initial guesses
-initial_fc = guess_fc
-initial_Q = guess_Q
-initial_Qc = guess_Qc
-initial_phi = guess_phi
+import numpy as np
+import pandas as pd
+import scipy.optimize as opt
+import matplotlib.pyplot as plt  
 
-# Extract data
-freq_Hz = reorganized_data[:, 0]  # Frequency in Hz
-mag_lin = reorganized_data[:, 1]  # Magnitude in linear scale
-phase_rad = reorganized_data[:, 2]  # Phase in radians
+freq_Hz = reorganized_data[:, 0]
+mag_lin = reorganized_data[:, 1]
+phase_rad = reorganized_data[:, 2]
 
-# Convert S21 data to complex form
-S21 = mag_lin * np.exp(1j * phase_rad)
+# Define Theoretical S21 Model
+def S21_model(freq, fc, phi, Q, Qc):
+    return 1 - (Q / Qc) * np.exp(1j * phi) / (1 + 2j * Q * (freq / fc - 1))
 
-def S21_residuals(params, freq_Hz, S21):
-    fc, Q, Qc, phi = params  # Unpacking parameters
-    model_S21 = 1 - (Q / Qc) * np.exp(1j * phi) / (1 + 2j * Q * (freq_Hz / fc - 1))
-    return np.concatenate([np.real(S21 - model_S21), np.imag(S21 - model_S21)])  # Return real & imag residuals
+def cost_function(params, freq, S21_data):
+    fc, phi, Q, Qc = params
+    if Q <= 0 or Qc <= 0:  # Prevent invalid values
+        return np.inf
+    S21_fit = S21_model(freq, fc, phi, Q, Qc)
+    residuals = np.abs(S21_fit - S21_data) / np.abs(S21_data)
+    return np.sum(residuals ** 2)
 
-def fit_S21(freq_Hz, S21, initial_fc, initial_Q, initial_Qc, initial_phi):
-    # Initial parameter guesses
-    params_init = [initial_fc, initial_Q, initial_Qc, initial_phi]
+# Monte Carlo Fitting
+def monte_carlo_fit(freq, S21_data, initial_guess, num_samples=10):
+    fc_guess, phi_guess, Q_guess, Qc_guess = initial_guess
+    
+    param_samples = np.array([
+        np.random.normal(fc_guess, 10, num_samples),  # Slightly larger variance
+        np.mod(np.random.normal(phi_guess, 0.001, num_samples) + np.pi, 2 * np.pi) - np.pi,  # Wrap phi
+        np.abs(np.random.normal(Q_guess, 0.01 * Q_guess, num_samples)),  # Ensure positive values
+        np.abs(np.random.normal(Qc_guess, 0.001 * Qc_guess, num_samples))  # Ensure positive values
+    ]).T
+    
+    results = []
+    best_fit_params = None
+    best_cost = np.inf
 
-    # Perform least squares optimization
-    result = opt.least_squares(S21_residuals, params_init, args=(freq_Hz, S21), jac='3-point')
+    for params in param_samples:
+        try:
+            res = opt.minimize(cost_function, params, args=(freq, S21_data), method='Nelder-Mead')
+            if res.success and res.fun < best_cost:
+                best_cost = res.fun
+                best_fit_params = res.x
+            if res.success:
+                results.append(res.x)
+        except Exception as e:
+            print(f"Optimization failed for {params}: {e}")
+    
+    if len(results) == 0:
+        raise ValueError("Monte Carlo fitting failed: No valid fits found.")
 
-    # Extract fitted parameters
-    fc_fit, Q_fit, Qc_fit, phi_fit = result.x
+    results = np.array(results)
 
-    # Compute parameter uncertainties using the covariance matrix
-    J = result.jac  # Jacobian matrix
-    cov_matrix = np.linalg.inv(J.T @ J)  # Covariance matrix estimation
+    # Filter only successful fits with positive Q and Qc
+    valid_results = results[(results[:, 2] > 0) & (results[:, 3] > 0)]
+    
+    if len(valid_results) == 0:
+        raise ValueError("Monte Carlo fitting failed: No valid results.")
 
-    # Standard deviation of fitted parameters (square root of diagonal elements)
-    sigma_fc, sigma_Q, sigma_Qc, sigma_phi = np.sqrt(np.diag(cov_matrix))
+    param_means = np.mean(valid_results, axis=0)
+    param_stds = np.std(valid_results, axis=0)
 
-    # Error propagation for Qi: Qi = (Q * Qc) / (Qc - Q)
-    Qi_fit = (Q_fit * Qc_fit) / (Qc_fit - Q_fit)
-    sigma_Qi = Qi_fit * np.sqrt((sigma_Q / Q_fit)**2 + (sigma_Qc / Qc_fit)**2)
+    return param_means, param_stds
 
-    return fc_fit, sigma_fc, Q_fit, sigma_Q, Qc_fit, sigma_Qc, phi_fit, sigma_phi, Qi_fit, sigma_Qi
+# Example Usage
+# Simulated Example Data (Replace with real data)
+freq_Hz = freq_Hz 
+S21_data = mag_lin * np.exp(1j * phase_rad)
 
-# Perform fitting
-fc_fit, sigma_fc, Q_fit, sigma_Q, Qc_fit, sigma_Qc, phi_fit, sigma_phi, Qi_fit, sigma_Qi = fit_S21(freq_Hz, S21, initial_fc, initial_Q, initial_Qc, initial_phi)
+# Example initial guesses (should be adapted to real data)
+initial_guess = (guess_fc, guess_phi, guess_Q, guess_Qc)
 
-# Print results in the requested format
-print(f"==============================================")
-print(f"Fitted fc: {fc_fit / 1e9:.6f} ± {sigma_fc / 1e9:.6f} GHz")
-print(f"Fitted Q: {Q_fit / 1e6:.4f} ± {sigma_Q / 1e6:.4f} x 10\u2076")
-print(f"Fitted Qc: {Qc_fit / 1e6:.4f} ± {sigma_Qc / 1e6:.4f} x 10\u2076")
-print(f"Fitted phi: {phi_fit:.4f} ± {sigma_phi:.4f} rad")
-print(f"Inferred Qi: {Qi_fit / 1e6:.4f} ± {sigma_Qi / 1e6:.4f} x 10\u2076")
+# Run Monte Carlo fitting
+best_params, param_errors = monte_carlo_fit(freq_Hz, S21_data, initial_guess)
+
+fc, phi, Q, Qc = best_params
+sigma_fc, sigma_phi, sigma_Q, sigma_Qc = param_errors
+
+Qi = 1 / (1 / Q - 1 / Qc)
+sigma_Qi = Qi**2 * np.sqrt((sigma_Q / Q**2) ** 2 + (sigma_Qc / Qc**2) ** 2)
+
+# Print Results
+print("\n🔹 Best Fit Parameters:")
+print(f"Fitted Q: ({Q / 1e6:.4f} ± {sigma_Q / 1e6:.4f}) x 10⁶")
+print(f"Inferred Qi: ({Qi / 1e6:.4f} ± {sigma_Qi / 1e6:.4f}) x 10⁶")
+print(f"Fitted |Qc|: ({Qc / 1e6:.4f} ± {sigma_Qc / 1e6:.4f}) x 10⁶")
+print(f"Fitted phi: {np.rad2deg(phi):.3f} ± {np.rad2deg(sigma_phi):.3f} deg")
+print(f"Fitted fc: {fc / 1e9:.9f} ± {sigma_fc / 1e9:.9f} GHz")
+
+   
+# Function to plot final results
+def Plot_Final_Fit_Data(organized_data, fc, phi, Q, Qc):
+    freq_Hz = organized_data[:, 0]  
+    mag_lin = organized_data[:, 1] 
+    phase_rad = organized_data[:, 2] 
+
+    S21 = mag_lin * np.exp(1j * phase_rad)
+    S21_real = np.real(S21)
+    S21_imag = np.imag(S21)
+
+    freq_GHz = freq_Hz / 1e9
+    mag_dB = 20 * np.log10(mag_lin) 
+    phase_deg = np.rad2deg(phase_rad)
+
+    # Use the S21 model for the final fit
+    S21_final_fit = S21_model(freq_Hz, fc, phi, Q, Qc)
+    mag_lin_final_fit = np.abs(S21_final_fit)
+    mag_dB_final_fit = 20 * np.log10(mag_lin_final_fit)
+    phase_deg_final_fit = np.rad2deg(np.angle(S21_final_fit))
+    S21_real_final_fit = np.real(S21_final_fit)
+    S21_imag_final_fit = np.imag(S21_final_fit)
+    
+    fc_GHz = fc / 1e9
+    
+    # Find the closest frequency point to fc
+    closest_index = np.argmin(np.abs(freq_Hz - fc))
+    mag_dB_fc_final_fit = mag_dB[closest_index]
+    phase_deg_fc_final_fit = phase_deg[closest_index]
+    z_fc_final_fit = S21_real[closest_index] + 1j * S21_imag[closest_index]
+
+    # Create figure
+    fig = plt.figure(figsize=(10, 5))
+
+    # Plot Frequency vs Magnitude (dB)
+    ax1 = fig.add_subplot(2, 2, 1)
+    ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Measured Mag", alpha=1)
+    ax1.scatter(fc_GHz, mag_dB_fc_final_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
+    ax1.plot(freq_GHz, mag_dB_final_fit, label="Fitted Mag", color="green")
+    ax1.set_xlabel("Freq (GHz)")
+    ax1.set_ylabel("Mag (dB)")
+    ax1.set_title("Freq vs Mag")
+    ax1.grid(True)
+    ax1.legend()
+    
+    # Plot Frequency vs Phase (degrees)
+    ax2 = fig.add_subplot(2, 2, 3)
+    ax2.scatter(freq_GHz, phase_deg, color='orange', s=50, marker='o', label="Measured Phase", alpha=1)
+    ax2.scatter(fc_GHz, phase_deg_fc_final_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
+    ax2.plot(freq_GHz, phase_deg_final_fit, label="Fitted Phase", color="green")
+    ax2.set_xlabel("Freq (GHz)")
+    ax2.set_ylabel("Phase (deg)")
+    ax2.set_title("Freq vs Phase")
+    ax2.grid(True)
+    ax2.legend()
+
+    # Plot Real(S21) vs Imag(S21)
+    ax3 = fig.add_subplot(1, 2, 2)
+    ax3.scatter(S21_real, S21_imag, color='green', s=50, marker='o', label="Measured Data", alpha=1)
+    ax3.scatter(np.real(z_fc_final_fit), np.imag(z_fc_final_fit), color='red', s=500, marker='*', zorder=5, label="Resonance")
+    ax3.plot(S21_real_final_fit, S21_imag_final_fit, label="Fitted Circle", color="green")
+    ax3.axvline(x=1, color='black', linestyle='--', label=None)
+    ax3.axhline(y=0, color='black', linestyle='--', label=None)
+    ax3.plot([np.real(z_fc_final_fit), 1], [np.imag(z_fc_final_fit), 0], color='red', linestyle='-', linewidth=2, label=None)
+    ax3.set_xlabel("Real(S21)")
+    ax3.set_ylabel("Imag(S21)")
+    ax3.set_title("S21 Complex Plane")
+    ax3.grid(True)
+    ax3.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+Plot_Final_Fit_Data(reorganized_data, fc, phi, Q, Qc)
