@@ -5,7 +5,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
 from scipy.interpolate import interp1d
-
 # %% Define Some Useful Functions
 ######################################
 #### Input:                       ####
@@ -587,15 +586,17 @@ def Plot_Fit_Data(organized_data):
 Plot_Fit_Data(reorganized_data)
 
 # %% Start Fitting Using Initial Guessing
-import numpy as np
-import pandas as pd
-import scipy.optimize as opt
-import matplotlib.pyplot as plt  
+print("Start fitting process...")
 
 freq_Hz = reorganized_data[:, 0]
 mag_lin = reorganized_data[:, 1]
 phase_rad = reorganized_data[:, 2]
 S21_data = mag_lin * np.exp(1j * phase_rad)
+
+guess_fc = find_fc(reorganized_data)
+guess_Qc = find_Qc(reorganized_data)
+guess_phi = find_phi(reorganized_data)
+guess_Q = find_Q(reorganized_data, plot=False)
 
 # Define Theoretical S21 Model
 def S21_model(freq, fc, phi, Q, Qc):
@@ -605,17 +606,22 @@ def S21_model(freq, fc, phi, Q, Qc):
 def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_samples=10, N=10):
     best_params_list = []  # Store best parameters from each iteration
 
+    best_cost_fc, best_fc = np.inf, guess_fc
+    best_cost_Qc, best_Qc = np.inf, guess_Qc
+    best_cost_phi, best_phi = np.inf, guess_phi
+    best_cost_Q, best_Q = np.inf, guess_Q
+        
+
     for _ in range(N):  # Perform Monte Carlo fitting N times
         # Fit fc
         plt.figure()
-        param_samples = np.random.normal(guess_fc, 10e3, num_samples)
-        best_cost, best_fc = np.inf, guess_fc
-        for param in param_samples:
-            test_S21 = S21_model(freq, param, guess_phi, guess_Q, guess_Qc)
-            cost = np.sum(np.abs(S21_data - test_S21)**2)
-            if cost < best_cost:
-                best_cost, best_fc = cost, param
-            plt.scatter(param, cost, color='blue', s=50, alpha=0.7)
+        param_samples_fc = np.random.normal(best_fc, 10e3, num_samples)
+        for param_fc in param_samples_fc:
+            test_S21 = S21_model(freq, param_fc, guess_phi, guess_Q, guess_Qc)
+            cost_fc = np.sum(np.abs(S21_data - test_S21)**2)
+            if cost_fc < best_cost_fc:
+                best_cost_fc, best_fc = cost_fc, param_fc
+            plt.scatter(param_fc, cost_fc, color='blue', s=50, alpha=0.7)
         plt.xlabel("fc (Hz)")
         plt.ylabel("Cost")
         plt.title("Monte Carlo Fit for fc")
@@ -623,14 +629,13 @@ def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_
 
         # Fit Qc
         plt.figure()
-        param_samples = np.random.normal(guess_Qc, 5e6, num_samples)
-        best_cost, best_Qc = np.inf, guess_Qc
-        for param in param_samples:
-            test_S21 = S21_model(freq, best_fc, guess_phi, guess_Q, param)
-            cost = np.sum(np.abs(S21_data - test_S21)**2)
-            if cost < best_cost:
-                best_cost, best_Qc = cost, param
-            plt.scatter(param, cost, color='blue', s=50, alpha=0.7)
+        param_samples_Qc = np.random.normal(best_Qc, 5e6, num_samples)
+        for param_Qc in param_samples_Qc:
+            test_S21 = S21_model(freq, best_fc, guess_phi, guess_Q, param_Qc)
+            cost_Qc = np.sum(np.abs(S21_data - test_S21)**2)
+            if cost_Qc < best_cost_Qc:
+                best_cost_Qc, best_Qc = cost_Qc, param_Qc
+            plt.scatter(param_Qc, cost_Qc, color='blue', s=50, alpha=0.7)
         plt.xlabel("Qc")
         plt.ylabel("Cost")
         plt.title("Monte Carlo Fit for Qc")
@@ -638,14 +643,13 @@ def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_
 
         # Fit phi
         plt.figure()
-        param_samples = np.random.uniform(-np.pi, np.pi, num_samples)
-        best_cost, best_phi = np.inf, guess_phi
-        for param in param_samples:
-            test_S21 = S21_model(freq, best_fc, param, guess_Q, best_Qc)
-            cost = np.sum(np.abs(S21_data - test_S21)**2)
-            if cost < best_cost:
-                best_cost, best_phi = cost, param
-            plt.scatter(np.rad2deg(param), cost, color='blue', s=50, alpha=0.7)
+        param_samples_phi = np.random.uniform(guess_phi, 1e-3, num_samples)
+        for param_phi in param_samples_phi:
+            test_S21 = S21_model(freq, best_fc, param_phi, guess_Q, best_Qc)
+            cost_phi = np.sum(np.abs(S21_data - test_S21)**2)
+            if cost_phi < best_cost_phi:
+                best_cost_phi, best_phi = cost_phi, param_phi
+            plt.scatter(np.rad2deg(param_phi), cost_phi, color='blue', s=50, alpha=0.7)
         plt.xlabel("Phi (degrees)")
         plt.ylabel("Cost")
         plt.title("Monte Carlo Fit for Phi")
@@ -653,14 +657,13 @@ def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_
 
         # Fit Q
         plt.figure()
-        param_samples = np.random.normal(guess_Q, 1e6, num_samples)
-        best_cost, best_Q = np.inf, guess_Q
-        for param in param_samples:
-            test_S21 = S21_model(freq, best_fc, best_phi, param, best_Qc)
-            cost = np.sum(np.abs(S21_data - test_S21)**2)
-            if cost < best_cost:
-                best_cost, best_Q = cost, param
-            plt.scatter(param, cost, color='blue', s=50, alpha=0.7)
+        param_samples_Q = np.random.normal(guess_Q, 1e6, num_samples)
+        for param_Q in param_samples_Q:
+            test_S21 = S21_model(freq, best_fc, best_phi, param_Q, best_Qc)
+            cost_Q = np.sum(np.abs(S21_data - test_S21)**2)
+            if cost_Q < best_cost_Q:
+                best_cost_Q, best_Q = cost_Q, param_Q
+            plt.scatter(param_Q, cost_Q, color='blue', s=50, alpha=0.7)
         plt.xlabel("Q")
         plt.ylabel("Cost")
         plt.title("Monte Carlo Fit for Q")
@@ -674,13 +677,13 @@ def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_
     
     # Compute mean and standard deviation for errors
     best_fc, best_Qc, best_phi, best_Q = np.mean(best_params_array, axis=0)
-    err_fc, err_Qc, err_phi, err_Q = np.std(best_params_array, axis=0)
+    err_fc, err_Qc, err_phi, err_Q = np.std(best_params_array, axis=0) / np.sqrt(N)
 
     return (best_fc, err_fc), (best_Qc, err_Qc), (best_phi, err_phi), (best_Q, err_Q)
 
 # Example Usage
 (fit_fc, err_fc), (fit_Qc, err_Qc), (fit_phi, err_phi), (fit_Q, err_Q) = monte_carlo_fit(
-    freq_Hz, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_samples=10, N=10
+    freq_Hz, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_samples=10, N=3
 )
 
 print(f"Optimized Parameters with Errors:")
