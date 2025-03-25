@@ -495,284 +495,402 @@ print(f"The infered internal quality factor (Qi): {(1 / guess_Q - 1 / guess_Qc) 
 print(f"Initial guess |Qc|: {guess_Qc/1e6:.4f} x 10\u2076")
 print(f"Initial guess phi: {np.rad2deg(-guess_phi):.4f} deg")
 print(f"Initial guess fc: {guess_fc / 1e9:.9f} GHz")
-
-# Draw the Initial Guessing Fitting
-def Plot_Fit_Data(organized_data):
-    freq_Hz = organized_data[:, 0]  
-    mag_lin = organized_data[:, 1] 
-    phase_rad = organized_data[:, 2] 
-
-    S21 = mag_lin * np.exp(1j * phase_rad)
-    S21_real = np.real(S21)
-    S21_imag = np.imag(S21)
-
-    freq_GHz = freq_Hz / 1e9
-    mag_dB = 20 * np.log10(mag_lin) 
-    phase_deg = np.rad2deg(phase_rad)
-
-    # Draw the fitted curve
-    zc_fit, d_fit = find_circle(organized_data)
-    phi = find_phi(organized_data)
-    theta = np.linspace(0, 2 * np.pi, len(freq_Hz))
-    z_fit = zc_fit + d_fit / 2 * np.exp(1j * theta) * np.exp(-1j * phi)
-    x_fit = np.real(z_fit)
-    y_fit = np.imag(z_fit)
-    
-    mag_lin_fit = np.abs(z_fit)
-    mag_dB_fit = 20 * np.log10(mag_lin_fit)
-    phase_rad_fit = np.angle(z_fit) 
-    phase_deg_fit = np.rad2deg(phase_rad_fit)
-    
-    # Assuming z_fc is defined as the resonance point
-    z_fc_fit = 1 + (zc_fit - 1) * 2
-
-    fc_Hz = find_fc(organized_data)
-    fc_GHz = fc_Hz / 1e9
-
-    mag_lin_fc_fit = np.abs(z_fc_fit)
-    mag_dB_fc_fit = 20 * np.log10(mag_lin_fc_fit)
-
-    phase_rad_fc_fit = np.angle(z_fc_fit)
-    phase_deg_fc_fit = np.rad2deg(phase_rad_fc_fit)
-
-    # Create figure
-    fig = plt.figure(figsize=(10, 5))
-
-    # Plot Frequency vs Magnitude (dB) - Left Top
-    ax1 = fig.add_subplot(2, 2, 1)
-    ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Mag", alpha=1)
-    ax1.scatter(fc_GHz, mag_dB_fc_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
-    ax1.plot(freq_GHz, mag_dB_fit, label="Fitted Mag", color="green")
-    ax1.set_xlabel("Freq (GHz)")
-    ax1.set_ylabel("Mag (dB)")
-    ax1.set_title("Freq vs Mag")
-    ax1.grid(True)
-    ax1.legend()
-    ax1.set_xticks(np.linspace(np.min(freq_GHz), np.max(freq_GHz), 3))
-
-    # Plot Frequency vs Phase (degrees) - Left Bottom
-    ax2 = fig.add_subplot(2, 2, 3)
-    ax2.scatter(freq_GHz, phase_deg, color='orange', s=50, marker='o', label="Phase", alpha=1)
-    ax2.scatter(fc_GHz, phase_deg_fc_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
-    ax2.plot(freq_GHz, phase_deg_fit, label="Fitted Phase", color="green")
-    ax2.set_xlabel("Freq (GHz)")
-    ax2.set_ylabel("Phase (deg)")
-    ax2.set_title("Freq vs Phase")
-    ax2.grid(True)
-    ax2.legend()
-    ax2.set_xticks(np.linspace(np.min(freq_GHz), np.max(freq_GHz), 3))
-
-    # Plot Real(S21) vs Imag(S21) - Right
-    ax3 = fig.add_subplot(1, 2, 2)  # Ensures a single, right-side wide plot
-    ax3.scatter(S21_real, S21_imag, color='green', s=50, marker='o', label="Reorganized Data", alpha=1)
-    ax3.scatter(np.real(z_fc_fit), np.imag(z_fc_fit), color='red', s=500, marker='*', zorder=5, label="Resonance")
-    ax3.plot(x_fit, y_fit, label="Fitted Circle", color="green")
-    # Adding dashed lines at x=1 and y=0
-    ax3.axvline(x=1, color='black', linestyle='--', label=None)
-    ax3.axhline(y=0, color='black', linestyle='--', label=None)
-    # Plotting the gray line connecting the star and (1, 0)
-    ax3.plot([np.real(z_fc_fit), 1], [np.imag(z_fc_fit), 0], color='red', linestyle='-', linewidth=2, label=None)
-    ax3.set_xlabel("Real(S21)")
-    ax3.set_ylabel("Imag(S21)")
-    ax3.set_title("S21 Complex Plane")
-    ax3.grid(True)
-    ax3.legend()
-    ax3.axis("equal")  # Ensures proper scaling of real/imag axes
-
-    # Improve layout spacing
-    plt.tight_layout()
-    plt.show()
-
-Plot_Fit_Data(reorganized_data)
-
-# %% Start Fitting Using Initial Guessing
-print("Start fitting process...")
+  
+# %% Doing the Monte Carlo to Adjust the Fit Parameters
+guess_fc = find_fc(reorganized_data)
+guess_Qc = find_Qc(reorganized_data)
+guess_Q = find_Q(reorganized_data, plot=False)
+guess_phi = find_phi(reorganized_data)
 
 freq_Hz = reorganized_data[:, 0]
 mag_lin = reorganized_data[:, 1]
 phase_rad = reorganized_data[:, 2]
 S21_data = mag_lin * np.exp(1j * phase_rad)
 
-guess_fc = find_fc(reorganized_data)
-guess_Qc = find_Qc(reorganized_data)
-guess_phi = find_phi(reorganized_data)
-guess_Q = find_Q(reorganized_data, plot=False)
-
 # Define Theoretical S21 Model
 def S21_model(freq, fc, phi, Q, Qc):
     return 1 - (Q / Qc) * np.exp(1j * phi) / (1 + 2j * Q * (freq / fc - 1))
 
-# Monte Carlo Fitting Function with Error Estimation
-def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_samples=10, N=10):
-    best_params_list = []  # Store best parameters from each iteration
+def Monte_Carlo_fit_complex_circle(freq, S21_data, guess_fc, guess_phi, guess_Q, guess_Qc, num_samples=10):
+    
+    test_S21_data = S21_model(freq, guess_fc, guess_phi, guess_Q, guess_Qc)
+    best_cost_Qc = np.sum(np.abs(S21_data - test_S21_data) ** 2)
+    best_Qc = guess_Qc
 
-    best_cost_fc, best_fc = np.inf, guess_fc
-    best_cost_Qc, best_Qc = np.inf, guess_Qc
-    best_cost_phi, best_phi = np.inf, guess_phi
-    best_cost_Q, best_Q = np.inf, guess_Q
+    # Fit Qc
+    plt.figure()
+    for i in range(num_samples):
+        param_Qc = float(np.random.normal(best_Qc, 1e5, 1))  # Ensure param_Qc is a scalar
+        test_S21_data = S21_model(freq, guess_fc, guess_phi, guess_Q, param_Qc)
+        cost_S21_data = np.sum(np.abs(S21_data - test_S21_data) ** 2)  # Compute total squared error
+
+        if cost_S21_data < best_cost_Qc:
+            best_cost_Qc, best_Qc = cost_S21_data, param_Qc  # Update best fit
         
+        plt.scatter(i, best_Qc, color='blue', s=50, alpha=0.7, label=None)
 
-    for _ in range(N):  # Perform Monte Carlo fitting N times
-        # Fit fc
-        plt.figure()
-        param_samples_fc = np.random.normal(best_fc, 1e3, num_samples)
-        for param_fc in param_samples_fc:
-            test_S21 = S21_model(freq, param_fc, guess_phi, guess_Q, guess_Qc)
-            cost_fc = np.sum(np.abs(S21_data - test_S21)**2)
-            if cost_fc < best_cost_fc:
-                best_cost_fc, best_fc = cost_fc, param_fc
-            plt.scatter(param_fc, cost_fc, color='blue', s=50, alpha=0.7)
-        plt.xlabel("fc (Hz)")
-        plt.ylabel("Cost")
-        plt.title("Monte Carlo Fit for fc")
-        plt.show()
-
-        # Fit Qc
-        plt.figure()
-        param_samples_Qc = np.random.normal(best_Qc, 5e6, num_samples)
-        for param_Qc in param_samples_Qc:
-            test_S21 = S21_model(freq, best_fc, guess_phi, guess_Q, param_Qc)
-            cost_Qc = np.sum(np.abs(S21_data - test_S21)**2)
-            if cost_Qc < best_cost_Qc:
-                best_cost_Qc, best_Qc = cost_Qc, param_Qc
-            plt.scatter(param_Qc, cost_Qc, color='blue', s=50, alpha=0.7)
-        plt.xlabel("Qc")
-        plt.ylabel("Cost")
-        plt.title("Monte Carlo Fit for Qc")
-        plt.show()
-
-        # Fit phi
-        plt.figure()
-        param_samples_phi = np.random.uniform(guess_phi, 0.1, num_samples)
-        for param_phi in param_samples_phi:
-            test_S21 = S21_model(freq, best_fc, param_phi, guess_Q, best_Qc)
-            cost_phi = np.sum(np.abs(S21_data - test_S21)**2)
-            if cost_phi < best_cost_phi:
-                best_cost_phi, best_phi = cost_phi, param_phi
-            plt.scatter(np.rad2deg(param_phi), cost_phi, color='blue', s=50, alpha=0.7)
-        plt.xlabel("Phi (degrees)")
-        plt.ylabel("Cost")
-        plt.title("Monte Carlo Fit for Phi")
-        plt.show()
-
-        # Fit Q
-        plt.figure()
-        param_samples_Q = np.random.normal(guess_Q, 1e6, num_samples)
-        for param_Q in param_samples_Q:
-            test_S21 = S21_model(freq, best_fc, best_phi, param_Q, best_Qc)
-            cost_Q = np.sum(np.abs(S21_data - test_S21)**2)
-            if cost_Q < best_cost_Q:
-                best_cost_Q, best_Q = cost_Q, param_Q
-            plt.scatter(param_Q, cost_Q, color='blue', s=50, alpha=0.7)
-        plt.xlabel("Q")
-        plt.ylabel("Cost")
-        plt.title("Monte Carlo Fit for Q")
-        plt.show()
-
-        # best_fc = guess_fc
-        # best_Qc = guess_Qc
-        # best_phi = guess_phi
-        # best_Q = guess_Q
-        # Store best parameters from this iteration
-        best_params_list.append((best_fc, best_Qc, best_phi, best_Q))
-
-    # Convert list to numpy array for easy calculations
-    best_params_array = np.array(best_params_list)
+    plt.xlabel("Iteration")
+    plt.ylabel("Qc")
+    plt.title("Monte Carlo Fit for Qc")
+    plt.show()
     
-    # Compute mean and standard deviation for errors
-    best_fc, best_Qc, best_phi, best_Q = np.mean(best_params_array, axis=0)
-    err_fc, err_Qc, err_phi, err_Q = np.std(best_params_array, axis=0) / np.sqrt(N)
-
-    return (best_fc, err_fc), (best_Qc, err_Qc), (best_phi, err_phi), (best_Q, err_Q)
-
-# Example Usage
-(fit_fc, err_fc), (fit_Qc, err_Qc), (fit_phi, err_phi), (fit_Q, err_Q) = monte_carlo_fit(
-    freq_Hz, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_samples=100, N=5
-)
-
-print(f"Optimized Parameters with Errors:")
-print(f"Fitted fc: {fit_fc / 1e9:.9f} ± {err_fc / 1e9:.9f} GHz")
-print(f"Fitted Qc: {fit_Qc:.4f} ± {err_Qc:.4f}")
-print(f"Fitted phi: {np.rad2deg(fit_phi):.4f} ± {np.rad2deg(err_phi):.4f} deg")
-print(f"Fitted Q: {fit_Q:.4f} ± {err_Q:.4f}")
-
-fit_Qi = 1 / (1 / fit_Q - 1 / fit_Qc)
-err_Qi = np.abs(fit_Qi * np.sqrt((err_Q / fit_Q) ** 2 + (err_Qc / fit_Qc) ** 2))
-
-print(f"Fitted Qi: {fit_Qi:.4f} ± {err_Qi:.4f}")
-
-# %%
-
-# Function to plot final results
-def Plot_Final_Fit_Data(organized_data, fc, phi, Q, Qc):
-    freq_Hz = organized_data[:, 0]  
-    mag_lin = organized_data[:, 1] 
-    phase_rad = organized_data[:, 2] 
-
-    S21 = mag_lin * np.exp(1j * phase_rad)
-    S21_real = np.real(S21)
-    S21_imag = np.imag(S21)
-
-    freq_GHz = freq_Hz / 1e9
-    mag_dB = 20 * np.log10(mag_lin) 
-    phase_deg = np.rad2deg(phase_rad)
-
-    # Use the S21 model for the final fit
-    S21_final_fit = S21_model(freq_Hz, fc, phi, Q, Qc)
-    mag_lin_final_fit = np.abs(S21_final_fit)
-    mag_dB_final_fit = 20 * np.log10(mag_lin_final_fit)
-    phase_deg_final_fit = np.rad2deg(np.angle(S21_final_fit))
-    S21_real_final_fit = np.real(S21_final_fit)
-    S21_imag_final_fit = np.imag(S21_final_fit)
-    
-    fc_GHz = fc / 1e9
-    
-    # Find the closest frequency point to fc
-    closest_index = np.argmin(np.abs(freq_Hz - fc))
-    mag_dB_fc_final_fit = mag_dB[closest_index]
-    phase_deg_fc_final_fit = phase_deg[closest_index]
-    z_fc_final_fit = S21_real[closest_index] + 1j * S21_imag[closest_index]
-
-    # Create figure
-    fig = plt.figure(figsize=(10, 5))
-
-    # Plot Frequency vs Magnitude (dB)
-    ax1 = fig.add_subplot(2, 2, 1)
-    ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Measured Mag", alpha=1)
-    ax1.scatter(fc_GHz, mag_dB_fc_final_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
-    ax1.plot(freq_GHz, mag_dB_final_fit, label="Fitted Mag", color="green")
-    ax1.set_xlabel("Freq (GHz)")
-    ax1.set_ylabel("Mag (dB)")
-    ax1.set_title("Freq vs Mag")
-    ax1.grid(True)
-    ax1.legend()
-    
-    # Plot Frequency vs Phase (degrees)
-    ax2 = fig.add_subplot(2, 2, 3)
-    ax2.scatter(freq_GHz, phase_deg, color='orange', s=50, marker='o', label="Measured Phase", alpha=1)
-    ax2.scatter(fc_GHz, phase_deg_fc_final_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
-    ax2.plot(freq_GHz, phase_deg_final_fit, label="Fitted Phase", color="green")
-    ax2.set_xlabel("Freq (GHz)")
-    ax2.set_ylabel("Phase (deg)")
-    ax2.set_title("Freq vs Phase")
-    ax2.grid(True)
-    ax2.legend()
-
-    # Plot Real(S21) vs Imag(S21)
-    ax3 = fig.add_subplot(1, 2, 2)
-    ax3.scatter(S21_real, S21_imag, color='green', s=50, marker='o', label="Measured Data", alpha=1)
-    ax3.scatter(np.real(z_fc_final_fit), np.imag(z_fc_final_fit), color='red', s=500, marker='*', zorder=5, label="Resonance")
-    ax3.plot(S21_real_final_fit, S21_imag_final_fit, label="Fitted Circle", color="green")
-    ax3.axvline(x=1, color='black', linestyle='--', label=None)
-    ax3.axhline(y=0, color='black', linestyle='--', label=None)
-    ax3.plot([np.real(z_fc_final_fit), 1], [np.imag(z_fc_final_fit), 0], color='red', linestyle='-', linewidth=2, label=None)
-    ax3.set_xlabel("Real(S21)")
-    ax3.set_ylabel("Imag(S21)")
-    ax3.set_title("S21 Complex Plane")
-    ax3.grid(True)
-    ax3.legend()
-
-    plt.tight_layout()
+    # Plot the best fit complex circle
+    best_S21_data = S21_model(freq, guess_fc, guess_phi, guess_Q, best_Qc)
+    plt.figure()
+    plt.plot(np.real(best_S21_data), np.imag(best_S21_data), label="Fitted Curve")
+    plt.scatter(np.real(S21_data), np.imag(S21_data), color='blue', s=50, alpha=0.7, label="Measured Data")
+    plt.xlabel("Re(S21)")
+    plt.ylabel("Im(S21)")
+    plt.legend()
+    plt.title("Best Fit in Complex Plane")
     plt.show()
 
-Plot_Final_Fit_Data(reorganized_data, fit_fc, fit_phi, fit_Q, fit_Qc)
+    return guess_fc, guess_phi, guess_Q, best_Qc
+
+Monte_Carlo_fit_complex_circle(freq_Hz, S21_data, guess_fc, guess_phi, guess_Q, guess_Qc, num_samples=500)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # %% Draw the Initial Guessing Fitting
+# def Plot_Fit_Data(organized_data):
+#     freq_Hz = organized_data[:, 0]  
+#     mag_lin = organized_data[:, 1] 
+#     phase_rad = organized_data[:, 2] 
+
+#     S21 = mag_lin * np.exp(1j * phase_rad)
+#     S21_real = np.real(S21)
+#     S21_imag = np.imag(S21)
+
+#     freq_GHz = freq_Hz / 1e9
+#     mag_dB = 20 * np.log10(mag_lin) 
+#     phase_deg = np.rad2deg(phase_rad)
+
+#     # Draw the fitted curve
+#     zc_fit, d_fit = find_circle(organized_data)
+#     phi = find_phi(organized_data)
+#     theta = np.linspace(0, 2 * np.pi, len(freq_Hz))
+#     z_fit = zc_fit + d_fit / 2 * np.exp(1j * theta) * np.exp(-1j * phi)
+#     x_fit = np.real(z_fit)
+#     y_fit = np.imag(z_fit)
+    
+#     mag_lin_fit = np.abs(z_fit)
+#     mag_dB_fit = 20 * np.log10(mag_lin_fit)
+#     phase_rad_fit = np.angle(z_fit) 
+#     phase_deg_fit = np.rad2deg(phase_rad_fit)
+    
+#     # Assuming z_fc is defined as the resonance point
+#     z_fc_fit = 1 + (zc_fit - 1) * 2
+
+#     fc_Hz = find_fc(organized_data)
+#     fc_GHz = fc_Hz / 1e9
+
+#     mag_lin_fc_fit = np.abs(z_fc_fit)
+#     mag_dB_fc_fit = 20 * np.log10(mag_lin_fc_fit)
+
+#     phase_rad_fc_fit = np.angle(z_fc_fit)
+#     phase_deg_fc_fit = np.rad2deg(phase_rad_fc_fit)
+
+#     # Create figure
+#     fig = plt.figure(figsize=(10, 5))
+
+#     # Plot Frequency vs Magnitude (dB) - Left Top
+#     ax1 = fig.add_subplot(2, 2, 1)
+#     ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Mag", alpha=1)
+#     ax1.scatter(fc_GHz, mag_dB_fc_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
+#     ax1.plot(freq_GHz, mag_dB_fit, label="Fitted Mag", color="green")
+#     ax1.set_xlabel("Freq (GHz)")
+#     ax1.set_ylabel("Mag (dB)")
+#     ax1.set_title("Freq vs Mag")
+#     ax1.grid(True)
+#     ax1.legend()
+#     ax1.set_xticks(np.linspace(np.min(freq_GHz), np.max(freq_GHz), 3))
+
+#     # Plot Frequency vs Phase (degrees) - Left Bottom
+#     ax2 = fig.add_subplot(2, 2, 3)
+#     ax2.scatter(freq_GHz, phase_deg, color='orange', s=50, marker='o', label="Phase", alpha=1)
+#     ax2.scatter(fc_GHz, phase_deg_fc_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
+#     ax2.plot(freq_GHz, phase_deg_fit, label="Fitted Phase", color="green")
+#     ax2.set_xlabel("Freq (GHz)")
+#     ax2.set_ylabel("Phase (deg)")
+#     ax2.set_title("Freq vs Phase")
+#     ax2.grid(True)
+#     ax2.legend()
+#     ax2.set_xticks(np.linspace(np.min(freq_GHz), np.max(freq_GHz), 3))
+
+#     # Plot Real(S21) vs Imag(S21) - Right
+#     ax3 = fig.add_subplot(1, 2, 2)  # Ensures a single, right-side wide plot
+#     ax3.scatter(S21_real, S21_imag, color='green', s=50, marker='o', label="Reorganized Data", alpha=1)
+#     ax3.scatter(np.real(z_fc_fit), np.imag(z_fc_fit), color='red', s=500, marker='*', zorder=5, label="Resonance")
+#     ax3.plot(x_fit, y_fit, label="Fitted Circle", color="green")
+#     # Adding dashed lines at x=1 and y=0
+#     ax3.axvline(x=1, color='black', linestyle='--', label=None)
+#     ax3.axhline(y=0, color='black', linestyle='--', label=None)
+#     # Plotting the gray line connecting the star and (1, 0)
+#     ax3.plot([np.real(z_fc_fit), 1], [np.imag(z_fc_fit), 0], color='red', linestyle='-', linewidth=2, label=None)
+#     ax3.set_xlabel("Real(S21)")
+#     ax3.set_ylabel("Imag(S21)")
+#     ax3.set_title("S21 Complex Plane")
+#     ax3.grid(True)
+#     ax3.legend()
+#     ax3.axis("equal")  # Ensures proper scaling of real/imag axes
+
+#     # Improve layout spacing
+#     plt.tight_layout()
+#     plt.show()
+
+# Plot_Fit_Data(reorganized_data)
+
+# # %% Start Fitting Using Initial Guessing
+# print("Start fitting process...")
+
+# freq_Hz = reorganized_data[:, 0]
+# mag_lin = reorganized_data[:, 1]
+# phase_rad = reorganized_data[:, 2]
+# S21_data = mag_lin * np.exp(1j * phase_rad)
+
+# guess_fc = find_fc(reorganized_data)
+# guess_Qc = find_Qc(reorganized_data)
+# guess_phi = find_phi(reorganized_data)
+# guess_Q = find_Q(reorganized_data, plot=False)
+
+# # Define Theoretical S21 Model
+# def S21_model(freq, fc, phi, Q, Qc):
+#     return 1 - (Q / Qc) * np.exp(1j * phi) / (1 + 2j * Q * (freq / fc - 1))
+
+# # Monte Carlo Fitting Function with Error Estimation
+# def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_samples=10, N=10):
+#     best_params_list = []  # Store best parameters from each iteration
+
+#     best_cost_fc, best_fc = np.inf, guess_fc
+#     best_cost_Qc, best_Qc = np.inf, guess_Qc
+#     best_cost_phi, best_phi = np.inf, guess_phi
+#     best_cost_Q, best_Q = np.inf, guess_Q
+        
+
+#     for _ in range(N):  # Perform Monte Carlo fitting N times
+#         # Fit fc
+#         plt.figure()
+#         param_samples_fc = np.random.normal(best_fc, 1e3, num_samples)
+#         for param_fc in param_samples_fc:
+#             test_S21 = S21_model(freq, param_fc, guess_phi, guess_Q, guess_Qc)
+#             cost_fc = np.sum(np.abs(S21_data - test_S21)**2)
+#             if cost_fc < best_cost_fc:
+#                 best_cost_fc, best_fc = cost_fc, param_fc
+#             plt.scatter(param_fc, cost_fc, color='blue', s=50, alpha=0.7)
+#         plt.xlabel("fc (Hz)")
+#         plt.ylabel("Cost")
+#         plt.title("Monte Carlo Fit for fc")
+#         plt.show()
+
+#         # Fit Qc
+#         plt.figure()
+#         param_samples_Qc = np.random.normal(best_Qc, 5e6, num_samples)
+#         for param_Qc in param_samples_Qc:
+#             test_S21 = S21_model(freq, best_fc, guess_phi, guess_Q, param_Qc)
+#             cost_Qc = np.sum(np.abs(S21_data - test_S21)**2)
+#             if cost_Qc < best_cost_Qc:
+#                 best_cost_Qc, best_Qc = cost_Qc, param_Qc
+#             plt.scatter(param_Qc, cost_Qc, color='blue', s=50, alpha=0.7)
+#         plt.xlabel("Qc")
+#         plt.ylabel("Cost")
+#         plt.title("Monte Carlo Fit for Qc")
+#         plt.show()
+
+#         # Fit phi
+#         plt.figure()
+#         param_samples_phi = np.random.uniform(guess_phi, 0.1, num_samples)
+#         for param_phi in param_samples_phi:
+#             test_S21 = S21_model(freq, best_fc, param_phi, guess_Q, best_Qc)
+#             cost_phi = np.sum(np.abs(S21_data - test_S21)**2)
+#             if cost_phi < best_cost_phi:
+#                 best_cost_phi, best_phi = cost_phi, param_phi
+#             plt.scatter(np.rad2deg(param_phi), cost_phi, color='blue', s=50, alpha=0.7)
+#         plt.xlabel("Phi (degrees)")
+#         plt.ylabel("Cost")
+#         plt.title("Monte Carlo Fit for Phi")
+#         plt.show()
+
+#         # Fit Q
+#         plt.figure()
+#         param_samples_Q = np.random.normal(guess_Q, 1e6, num_samples)
+#         for param_Q in param_samples_Q:
+#             test_S21 = S21_model(freq, best_fc, best_phi, param_Q, best_Qc)
+#             cost_Q = np.sum(np.abs(S21_data - test_S21)**2)
+#             if cost_Q < best_cost_Q:
+#                 best_cost_Q, best_Q = cost_Q, param_Q
+#             plt.scatter(param_Q, cost_Q, color='blue', s=50, alpha=0.7)
+#         plt.xlabel("Q")
+#         plt.ylabel("Cost")
+#         plt.title("Monte Carlo Fit for Q")
+#         plt.show()
+
+#         # best_fc = guess_fc
+#         # best_Qc = guess_Qc
+#         # best_phi = guess_phi
+#         # best_Q = guess_Q
+#         # Store best parameters from this iteration
+#         best_params_list.append((best_fc, best_Qc, best_phi, best_Q))
+
+#     # Convert list to numpy array for easy calculations
+#     best_params_array = np.array(best_params_list)
+    
+#     # Compute mean and standard deviation for errors
+#     best_fc, best_Qc, best_phi, best_Q = np.mean(best_params_array, axis=0)
+#     err_fc, err_Qc, err_phi, err_Q = np.std(best_params_array, axis=0) / np.sqrt(N)
+
+#     return (best_fc, err_fc), (best_Qc, err_Qc), (best_phi, err_phi), (best_Q, err_Q)
+
+# # Example Usage
+# (fit_fc, err_fc), (fit_Qc, err_Qc), (fit_phi, err_phi), (fit_Q, err_Q) = monte_carlo_fit(
+#     freq_Hz, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_samples=100, N=5
+# )
+
+# print(f"Optimized Parameters with Errors:")
+# print(f"Fitted fc: {fit_fc / 1e9:.9f} ± {err_fc / 1e9:.9f} GHz")
+# print(f"Fitted Qc: {fit_Qc:.4f} ± {err_Qc:.4f}")
+# print(f"Fitted phi: {np.rad2deg(fit_phi):.4f} ± {np.rad2deg(err_phi):.4f} deg")
+# print(f"Fitted Q: {fit_Q:.4f} ± {err_Q:.4f}")
+
+# fit_Qi = 1 / (1 / fit_Q - 1 / fit_Qc)
+# err_Qi = np.abs(fit_Qi * np.sqrt((err_Q / fit_Q) ** 2 + (err_Qc / fit_Qc) ** 2))
+
+# print(f"Fitted Qi: {fit_Qi:.4f} ± {err_Qi:.4f}")
+
+# # %%
+
+# # Function to plot final results
+# def Plot_Final_Fit_Data(organized_data, fc, phi, Q, Qc):
+#     freq_Hz = organized_data[:, 0]  
+#     mag_lin = organized_data[:, 1] 
+#     phase_rad = organized_data[:, 2] 
+
+#     S21 = mag_lin * np.exp(1j * phase_rad)
+#     S21_real = np.real(S21)
+#     S21_imag = np.imag(S21)
+
+#     freq_GHz = freq_Hz / 1e9
+#     mag_dB = 20 * np.log10(mag_lin) 
+#     phase_deg = np.rad2deg(phase_rad)
+
+#     # Use the S21 model for the final fit
+#     S21_final_fit = S21_model(freq_Hz, fc, phi, Q, Qc)
+#     mag_lin_final_fit = np.abs(S21_final_fit)
+#     mag_dB_final_fit = 20 * np.log10(mag_lin_final_fit)
+#     phase_deg_final_fit = np.rad2deg(np.angle(S21_final_fit))
+#     S21_real_final_fit = np.real(S21_final_fit)
+#     S21_imag_final_fit = np.imag(S21_final_fit)
+    
+#     fc_GHz = fc / 1e9
+    
+#     # Find the closest frequency point to fc
+#     closest_index = np.argmin(np.abs(freq_Hz - fc))
+#     mag_dB_fc_final_fit = mag_dB[closest_index]
+#     phase_deg_fc_final_fit = phase_deg[closest_index]
+#     z_fc_final_fit = S21_real[closest_index] + 1j * S21_imag[closest_index]
+
+#     # Create figure
+#     fig = plt.figure(figsize=(10, 5))
+
+#     # Plot Frequency vs Magnitude (dB)
+#     ax1 = fig.add_subplot(2, 2, 1)
+#     ax1.scatter(freq_GHz, mag_dB, color='blue', s=50, marker='o', label="Measured Mag", alpha=1)
+#     ax1.scatter(fc_GHz, mag_dB_fc_final_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
+#     ax1.plot(freq_GHz, mag_dB_final_fit, label="Fitted Mag", color="green")
+#     ax1.set_xlabel("Freq (GHz)")
+#     ax1.set_ylabel("Mag (dB)")
+#     ax1.set_title("Freq vs Mag")
+#     ax1.grid(True)
+#     ax1.legend()
+    
+#     # Plot Frequency vs Phase (degrees)
+#     ax2 = fig.add_subplot(2, 2, 3)
+#     ax2.scatter(freq_GHz, phase_deg, color='orange', s=50, marker='o', label="Measured Phase", alpha=1)
+#     ax2.scatter(fc_GHz, phase_deg_fc_final_fit, color='red', s=500, marker='*', zorder=5, label="Resonance")
+#     ax2.plot(freq_GHz, phase_deg_final_fit, label="Fitted Phase", color="green")
+#     ax2.set_xlabel("Freq (GHz)")
+#     ax2.set_ylabel("Phase (deg)")
+#     ax2.set_title("Freq vs Phase")
+#     ax2.grid(True)
+#     ax2.legend()
+
+#     # Plot Real(S21) vs Imag(S21)
+#     ax3 = fig.add_subplot(1, 2, 2)
+#     ax3.scatter(S21_real, S21_imag, color='green', s=50, marker='o', label="Measured Data", alpha=1)
+#     ax3.scatter(np.real(z_fc_final_fit), np.imag(z_fc_final_fit), color='red', s=500, marker='*', zorder=5, label="Resonance")
+#     ax3.plot(S21_real_final_fit, S21_imag_final_fit, label="Fitted Circle", color="green")
+#     ax3.axvline(x=1, color='black', linestyle='--', label=None)
+#     ax3.axhline(y=0, color='black', linestyle='--', label=None)
+#     ax3.plot([np.real(z_fc_final_fit), 1], [np.imag(z_fc_final_fit), 0], color='red', linestyle='-', linewidth=2, label=None)
+#     ax3.set_xlabel("Real(S21)")
+#     ax3.set_ylabel("Imag(S21)")
+#     ax3.set_title("S21 Complex Plane")
+#     ax3.grid(True)
+#     ax3.legend()
+
+#     plt.tight_layout()
+#     plt.show()
+
+# Plot_Final_Fit_Data(reorganized_data, fit_fc, fit_phi, fit_Q, fit_Qc)
