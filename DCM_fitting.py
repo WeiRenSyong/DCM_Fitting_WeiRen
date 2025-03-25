@@ -469,7 +469,7 @@ def find_Qc(organized_data):
 ##############################################
 # Define folder path and file name separately
 folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_4-Tony_Ta_NbSi_03\Resonator_0_5p734GHz"
-file_name = r"Tony_Ta_NbSi_03_5p734GHz_-84dBm_-1000mK.csv"
+file_name = r"Tony_Ta_NbSi_03_5p734GHz_-30dBm_-1000mK.csv"
 
 # Combine folder path and file name
 file_path = os.path.join(folder_path, file_name)
@@ -595,87 +595,161 @@ import matplotlib.pyplot as plt
 freq_Hz = reorganized_data[:, 0]
 mag_lin = reorganized_data[:, 1]
 phase_rad = reorganized_data[:, 2]
+S21_data = mag_lin * np.exp(1j * phase_rad)
 
 # Define Theoretical S21 Model
 def S21_model(freq, fc, phi, Q, Qc):
     return 1 - (Q / Qc) * np.exp(1j * phi) / (1 + 2j * Q * (freq / fc - 1))
 
-def cost_function(params, freq, S21_data):
-    fc, phi, Q, Qc = params
-    if Q <= 0 or Qc <= 0:  # Prevent invalid values
-        return np.inf
-    S21_fit = S21_model(freq, fc, phi, Q, Qc)
-    residuals = np.abs(S21_fit - S21_data) / np.abs(S21_data)
-    return np.sum(residuals ** 2)
+# def cost_function(params, freq, S21_data):
+#     fc, phi, Q, Qc = params
+#     if Q <= 0 or Qc <= 0:  # Prevent invalid values
+#         return np.inf
+#     S21_fit = S21_model(freq, fc, phi, Q, Qc)
+#     residuals = np.abs(S21_fit - S21_data) / np.abs(S21_data)
+#     return np.sum(residuals ** 2)
 
-# Monte Carlo Fitting
-def monte_carlo_fit(freq, S21_data, initial_guess, num_samples=10):
-    fc_guess, phi_guess, Q_guess, Qc_guess = initial_guess
-    
-    param_samples = np.array([
-        np.random.normal(fc_guess, 10, num_samples),  # Slightly larger variance
-        np.mod(np.random.normal(phi_guess, 0.001, num_samples) + np.pi, 2 * np.pi) - np.pi,  # Wrap phi
-        np.abs(np.random.normal(Q_guess, 0.01 * Q_guess, num_samples)),  # Ensure positive values
-        np.abs(np.random.normal(Qc_guess, 0.001 * Qc_guess, num_samples))  # Ensure positive values
-    ]).T
-    
-    results = []
-    best_fit_params = None
+# Monte Carlo Fitting - Separate each Parameter (fc)
+def monte_carlo_fit_fc(freq, S21_data, guess_fc, num_samples=1000):
+    param_samples = np.array(np.random.normal(guess_fc, 10e3, num_samples))
     best_cost = np.inf
-
     for params in param_samples:
-        try:
-            res = opt.minimize(cost_function, params, args=(freq, S21_data), method='Nelder-Mead')
-            if res.success and res.fun < best_cost:
-                best_cost = res.fun
-                best_fit_params = res.x
-            if res.success:
-                results.append(res.x)
-        except Exception as e:
-            print(f"Optimization failed for {params}: {e}")
+        test_S21 = 1 - (guess_Q / guess_Qc) * np.exp(1j * guess_phi) / (1 + 2j * guess_Q * (freq / params - 1))
+        cost = np.sum(np.abs(S21_data - test_S21)**2)
+        if cost < best_cost:
+            best_cost = cost
+            best_fit_params = params
+        # plt.scatter(params, cost, color='blue', s=50, marker='o', label="fc_cost", alpha=1)
+    fc = best_fit_params
+    return fc
+fit_fc = monte_carlo_fit_fc(freq_Hz, S21_data, guess_fc, num_samples=1000)
+print(f"Fitted fc: {fit_fc / 1e9} GHz")
+
+# Monte Carlo Fitting - Separate each Parameter (Qc)
+def monte_carlo_fit_Qc(freq, S21_data, guess_Qc, num_samples=1000):
+    param_samples = np.array(np.random.normal(guess_Qc, 5e6, num_samples))
+    best_cost = np.inf
+    for params in param_samples:
+        test_S21 = 1 - (guess_Q / params) * np.exp(1j * guess_phi) / (1 + 2j * guess_Q * (freq / fit_fc - 1))
+        cost = np.sum(np.abs(S21_data - test_S21)**2)
+        if cost < best_cost:
+            best_cost = cost
+            best_fit_params = params
+        # plt.scatter(params, cost, color='blue', s=50, marker='o', label="Qc_cost", alpha=1)
+        # plt.ylim([0,5])
+    Qc = best_fit_params
+    return Qc
+fit_Qc = monte_carlo_fit_Qc(freq_Hz, S21_data, guess_Qc, num_samples=1000)
+print(f"Fitted Qc: {fit_Qc}")
+
+# Monte Carlo Fitting - Separate each Parameter (phi)
+def monte_carlo_fit_phi(freq, S21_data, guess_phi, num_samples=1000):
+    N = num_samples  # Change this to the desired size
+    param_samples = np.array(np.random.uniform(-np.pi, np.pi, (N, 1)))
+    best_cost = np.inf
+    for params in param_samples:
+        test_S21 = 1 - (guess_Q / fit_Qc) * np.exp(1j * params) / (1 + 2j * guess_Q * (freq / fit_fc - 1))
+        cost = np.sum(np.abs(S21_data - test_S21)**2)
+        if cost < best_cost:
+            best_cost = cost
+            best_fit_params = params
+        # plt.scatter(np.rad2deg(params), cost, color='blue', s=50, marker='o', label="phi_cost", alpha=1)
+        # plt.ylim([0,5])
+    phi = best_fit_params
+    return phi
+fit_phi = monte_carlo_fit_phi(freq_Hz, S21_data, guess_phi, num_samples=1000)
+print(f"Fitted phi: {np.rad2deg(-fit_phi)} deg")
+
+# Monte Carlo Fitting - Separate each Parameter (Qc)
+def monte_carlo_fit_Q(freq, S21_data, guess_Q, num_samples=1000):
+    param_samples = np.array(np.random.normal(guess_Q, 1e6, num_samples))
+    best_cost = np.inf
+    for params in param_samples:
+        test_S21 = 1 - (params / fit_Qc) * np.exp(1j * fit_phi) / (1 + 2j * params * (freq / fit_fc - 1))
+        cost = np.sum(np.abs(S21_data - test_S21)**2)
+        if cost < best_cost:
+            best_cost = cost
+            best_fit_params = params
+        plt.scatter(params, cost, color='blue', s=50, marker='o', label="Qc_cost", alpha=1)
+        # plt.ylim([0,5])
+    Q = best_fit_params
+    return Q
+fit_Q = monte_carlo_fit_Q(freq_Hz, S21_data, guess_Q, num_samples=1000)
+print(f"Fitted Q: {fit_Q}")
+
+Qi = 1 / (1 / fit_Q - 1 / fit_Qc)
+
+
+# %%
+
+# # Monte Carlo Fitting 
+# def monte_carlo_fit(freq, S21_data, initial_guess, num_samples=10):
+#     fc_guess, phi_guess, Q_guess, Qc_guess = initial_guess
     
-    if len(results) == 0:
-        raise ValueError("Monte Carlo fitting failed: No valid fits found.")
-
-    results = np.array(results)
-
-    # Filter only successful fits with positive Q and Qc
-    valid_results = results[(results[:, 2] > 0) & (results[:, 3] > 0)]
+#     param_samples = np.array([
+#         np.random.normal(fc_guess, 10, num_samples),
+#         np.mod(np.random.normal(phi_guess, 0.001, num_samples) + np.pi, 2 * np.pi) - np.pi,  # Wrap phi
+#         np.abs(np.random.normal(Q_guess, 0.01 * Q_guess, num_samples)),  # Ensure positive values
+#         np.abs(np.random.normal(Qc_guess, 0.001 * Qc_guess, num_samples))  # Ensure positive values
+#     ]).T
     
-    if len(valid_results) == 0:
-        raise ValueError("Monte Carlo fitting failed: No valid results.")
+#     results = []
+#     best_fit_params = None
+#     best_cost = np.inf
 
-    param_means = np.mean(valid_results, axis=0)
-    param_stds = np.std(valid_results, axis=0)
+#     for params in param_samples:
+#         try:
+#             res = opt.minimize(cost_function, params, args=(freq, S21_data), method='Nelder-Mead')
+#             if res.success and res.fun < best_cost:
+#                 best_cost = res.fun
+#                 best_fit_params = res.x
+#             if res.success:
+#                 results.append(res.x)
+#         except Exception as e:
+#             print(f"Optimization failed for {params}: {e}")
+    
+#     if len(results) == 0:
+#         raise ValueError("Monte Carlo fitting failed: No valid fits found.")
 
-    return param_means, param_stds
+#     results = np.array(results)
 
-# Example Usage
-# Simulated Example Data (Replace with real data)
-freq_Hz = freq_Hz 
-S21_data = mag_lin * np.exp(1j * phase_rad)
+#     # Filter only successful fits with positive Q and Qc
+#     valid_results = results[(results[:, 2] > 0) & (results[:, 3] > 0)]
+    
+#     if len(valid_results) == 0:
+#         raise ValueError("Monte Carlo fitting failed: No valid results.")
 
-# Example initial guesses (should be adapted to real data)
-initial_guess = (guess_fc, guess_phi, guess_Q, guess_Qc)
+#     param_means = np.mean(valid_results, axis=0)
+#     param_stds = np.std(valid_results, axis=0) / np.sqrt(len(freq))
 
-# Run Monte Carlo fitting
-best_params, param_errors = monte_carlo_fit(freq_Hz, S21_data, initial_guess)
+#     return param_means, param_stds
 
-fc, phi, Q, Qc = best_params
-sigma_fc, sigma_phi, sigma_Q, sigma_Qc = param_errors
+# # Example Usage
+# # Simulated Example Data (Replace with real data)
+# freq_Hz = freq_Hz 
+# S21_data = mag_lin * np.exp(1j * phase_rad)
 
-Qi = 1 / (1 / Q - 1 / Qc)
-sigma_Qi = Qi**2 * np.sqrt((sigma_Q / Q**2) ** 2 + (sigma_Qc / Qc**2) ** 2)
+# # Example initial guesses (should be adapted to real data)
+# initial_guess = (guess_fc, guess_phi, guess_Q, guess_Qc)
 
-# Print Results
-print("\n🔹 Best Fit Parameters:")
-print(f"Fitted Q: ({Q / 1e6:.4f} ± {sigma_Q / 1e6:.4f}) x 10⁶")
-print(f"Inferred Qi: ({Qi / 1e6:.4f} ± {sigma_Qi / 1e6:.4f}) x 10⁶")
-print(f"Fitted |Qc|: ({Qc / 1e6:.4f} ± {sigma_Qc / 1e6:.4f}) x 10⁶")
-print(f"Fitted phi: {np.rad2deg(phi):.3f} ± {np.rad2deg(sigma_phi):.3f} deg")
-print(f"Fitted fc: {fc / 1e9:.9f} ± {sigma_fc / 1e9:.9f} GHz")
+# # Run Monte Carlo fitting
+# best_params, param_errors = monte_carlo_fit(freq_Hz, S21_data, initial_guess)
 
-   
+# fc, phi, Q, Qc = best_params
+# sigma_fc, sigma_phi, sigma_Q, sigma_Qc = param_errors
+
+# Qi = 1 / (1 / Q - 1 / Qc)
+# sigma_Qi = Qi**2 * np.sqrt((sigma_Q / Q**2) ** 2 + (sigma_Qc / Qc**2) ** 2)
+
+# # Print Results
+# print("\n🔹 Best Fit Parameters:")
+# print(f"Fitted Q: ({Q / 1e6:.4f} ± {sigma_Q / 1e6:.4f}) x 10⁶")
+# print(f"Inferred Qi: ({Qi / 1e6:.4f} ± {sigma_Qi / 1e6:.4f}) x 10⁶")
+# print(f"Fitted |Qc|: ({Qc / 1e6:.4f} ± {sigma_Qc / 1e6:.4f}) x 10⁶")
+# print(f"Fitted phi: {np.rad2deg(phi):.3f} ± {np.rad2deg(sigma_phi):.3f} deg")
+# print(f"Fitted fc: {fc / 1e9:.9f} ± {sigma_fc / 1e9:.9f} GHz")
+
+
 # Function to plot final results
 def Plot_Final_Fit_Data(organized_data, fc, phi, Q, Qc):
     freq_Hz = organized_data[:, 0]  
@@ -748,4 +822,5 @@ def Plot_Final_Fit_Data(organized_data, fc, phi, Q, Qc):
     plt.tight_layout()
     plt.show()
 
-Plot_Final_Fit_Data(reorganized_data, fc, phi, Q, Qc)
+Plot_Final_Fit_Data(reorganized_data, fit_fc, fit_phi, fit_Q, fit_Qc)
+# %%
