@@ -373,7 +373,7 @@ print(f"Define find_phi function...")
 def find_phi(organized_data):
     zc, d = find_circle(organized_data)
     phi = np.angle(1 - zc)  # Phase of ((1+0j) - S21_fc) in rad
-    return -phi
+    return phi
 
 #####################################################
 #### Input:                                      ####
@@ -615,7 +615,7 @@ def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_
     for _ in range(N):  # Perform Monte Carlo fitting N times
         # Fit fc
         plt.figure()
-        param_samples_fc = np.random.normal(best_fc, 10e3, num_samples)
+        param_samples_fc = np.random.normal(best_fc, 1e3, num_samples)
         for param_fc in param_samples_fc:
             test_S21 = S21_model(freq, param_fc, guess_phi, guess_Q, guess_Qc)
             cost_fc = np.sum(np.abs(S21_data - test_S21)**2)
@@ -643,7 +643,7 @@ def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_
 
         # Fit phi
         plt.figure()
-        param_samples_phi = np.random.uniform(guess_phi, 1e-3, num_samples)
+        param_samples_phi = np.random.uniform(guess_phi, 0.1, num_samples)
         for param_phi in param_samples_phi:
             test_S21 = S21_model(freq, best_fc, param_phi, guess_Q, best_Qc)
             cost_phi = np.sum(np.abs(S21_data - test_S21)**2)
@@ -669,6 +669,10 @@ def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_
         plt.title("Monte Carlo Fit for Q")
         plt.show()
 
+        # best_fc = guess_fc
+        # best_Qc = guess_Qc
+        # best_phi = guess_phi
+        # best_Q = guess_Q
         # Store best parameters from this iteration
         best_params_list.append((best_fc, best_Qc, best_phi, best_Q))
 
@@ -683,7 +687,7 @@ def monte_carlo_fit(freq, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_
 
 # Example Usage
 (fit_fc, err_fc), (fit_Qc, err_Qc), (fit_phi, err_phi), (fit_Q, err_Q) = monte_carlo_fit(
-    freq_Hz, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_samples=10, N=3
+    freq_Hz, S21_data, guess_fc, guess_Qc, guess_phi, guess_Q, num_samples=100, N=5
 )
 
 print(f"Optimized Parameters with Errors:")
