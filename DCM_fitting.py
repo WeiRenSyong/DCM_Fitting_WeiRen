@@ -467,8 +467,8 @@ def find_Qc(organized_data):
 #### 4. find coupling quality factor (Qc) ####
 ##############################################
 # Define folder path and file name separately
-folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_4-Tony_Ta_NbSi_03\Resonator_0_5p734GHz"
-file_name = r"Tony_Ta_NbSi_03_5p734GHz_-81dBm_-1000mK.csv"
+folder_path = r"C:\Users\user\Documents\GitHub\Cooldown_56_Line_5-NW_Ta2O5_15nm_01\2024_10_18_Final_Organized_Data\All_csv_raw_data_and_fitting_results\Resonator_3_5p892GHz"
+file_name = r"NW_Ta2O5_15nm_01_5p892GHz_-72dBm_-1000mK.csv"
 
 # Combine folder path and file name
 file_path = os.path.join(folder_path, file_name)
