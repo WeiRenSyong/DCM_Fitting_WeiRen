@@ -625,51 +625,54 @@ S21_data = mag_lin * np.exp(1j * phase_rad)
 def S21_model(freq, fc, phi, Q, Qc):
     return 1 - (Q / Qc) * np.exp(1j * phi) / (1 + 2j * Q * (freq / fc - 1))
 
-def Monte_Carlo_fit_complex_circle(freq, S21_data, guess_fc, guess_phi, guess_Q, guess_Qc, num_samples=10000):
+def Monte_Carlo_fit_complex_circle(freq, S21_data, guess_fc, guess_phi, guess_Q, guess_Qc, num_samples=int(1e4)):
     best_cost = np.inf
     best_fc, best_phi, best_Q, best_Qc = guess_fc, guess_phi, guess_Q, guess_Qc
 
-    # Store results for histograms
     fc_list, phi_list, Q_list, Qc_list = [], [], [], []
 
     for _ in range(num_samples):
-        # Propose new parameter values using Gaussian perturbations
-        param_fc = np.random.normal(guess_fc, 10)
-        param_phi = np.random.normal(guess_phi, 0.002)
-        param_Q = np.random.normal(guess_Q, 1e4)
-        param_Qc = np.random.normal(guess_Qc, 5e4)
+        # Adaptive parameter sampling around best values
+        param_fc = np.random.normal(best_fc, 10)
+        param_phi = np.random.normal(best_phi, 0.002)
+        param_Q = np.random.normal(best_Q, 1e4)
+        param_Qc = np.random.normal(best_Qc, 1e4)
 
-        # Evaluate the cost function
+        # Compute cost function
         test_S21_data = S21_model(freq, param_fc, param_phi, param_Q, param_Qc)
         cost = np.sum(np.abs(S21_data - test_S21_data) ** 2)
 
-        # Accept if the new cost is lower
+        # Accept if cost improves
         if cost < best_cost:
             best_cost = cost
             best_fc, best_phi, best_Q, best_Qc = param_fc, param_phi, param_Q, param_Qc
 
-            # Store parameters for histogram analysis
+            # Store results
             fc_list.append(best_fc)
             phi_list.append(best_phi)
             Q_list.append(best_Q)
             Qc_list.append(best_Qc)
 
-    best_fit_fc, best_fit_phi, best_fit_Q, best_fit_Qc = np.mean(fc_list), np.mean(phi_list), np.mean(Q_list), np.mean(Qc_list)
-    error_fit_fc, error_fit_phi, error_fit_Q, error_fit_Qc = np.std(fc_list) / len(fc_list), np.std(phi_list) / len(phi_list), np.std(Q_list) / len(Q_list), np.std(Qc_list) / len(Qc_list)
+    plt.show()
 
-    # Plot histograms for each parameter
+    # Compute mean and error (corrected)
+    best_fit_fc, best_fit_phi, best_fit_Q, best_fit_Qc = np.mean(fc_list), np.mean(phi_list), np.mean(Q_list), np.mean(Qc_list)
+    error_fit_fc, error_fit_phi, error_fit_Q, error_fit_Qc = np.std(fc_list) / np.sqrt(len(fc_list)), np.std(phi_list) / np.sqrt(len(phi_list)), np.std(Q_list) / np.sqrt(len(Q_list)), np.std(Qc_list) / np.sqrt(len(Qc_list))
+
+    # Plot histograms
+    bins = int(np.sqrt(len(fc_list)))  # Approximate best bin count
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
-    axes[0, 0].hist(fc_list, bins=10, color='blue', alpha=0.7)
+    axes[0, 0].hist(fc_list, bins=bins, color='blue', alpha=0.7)
     axes[0, 0].set_title("Histogram of fc")
 
-    axes[0, 1].hist(Q_list, bins=10, color='red', alpha=0.7)
+    axes[0, 1].hist(Q_list, bins=bins, color='red', alpha=0.7)
     axes[0, 1].set_title("Histogram of Q")
 
-    axes[1, 0].hist(Qc_list, bins=10, color='black', alpha=0.7)
+    axes[1, 0].hist(Qc_list, bins=bins, color='black', alpha=0.7)
     axes[1, 0].set_title("Histogram of Qc")
 
-    axes[1, 1].hist(phi_list, bins=10, color='green', alpha=0.7)
+    axes[1, 1].hist(phi_list, bins=bins, color='green', alpha=0.7)
     axes[1, 1].set_title("Histogram of phi")
 
     plt.tight_layout()
@@ -677,17 +680,17 @@ def Monte_Carlo_fit_complex_circle(freq, S21_data, guess_fc, guess_phi, guess_Q,
 
     return best_fit_fc, error_fit_fc, best_fit_phi, error_fit_phi, best_fit_Q, error_fit_Q, best_fit_Qc, error_fit_Qc
 
-best_fit_fc, error_fit_fc, best_fit_phi, error_fit_phi, best_fit_Q, error_fit_Q, best_fit_Qc, error_fit_Qc = Monte_Carlo_fit_complex_circle(freq_Hz, S21_data, guess_fc, guess_phi, guess_Q, guess_Qc, num_samples=int(1e6))
-best_fit_Qi = (1 / best_fit_Q - 1 / best_fit_Qc) ** (-1)
-error_fit_Qi = best_fit_Qi ** 2 * np.sqrt((error_fit_Q / (best_fit_Q ** 2)) ** 2 + (error_fit_Qc / (best_fit_Qc ** 2)) ** 2)
+best_fit_fc, error_fit_fc, best_fit_phi, error_fit_phi, best_fit_Q, error_fit_Q, best_fit_Qc, error_fit_Qc = Monte_Carlo_fit_complex_circle(freq_Hz, S21_data, guess_fc, guess_phi, guess_Q, guess_Qc, num_samples=int(1e4))
 
-print(f"Final Q: ({best_fit_Q/1e6:.6f} ± {error_fit_Q/1e6:.6f}) × 10\u2076")
-print(f"The infered internal quality factor (Qi): ({best_fit_Qi/1e6:.6f} ± {error_fit_Qi/1e6:.6f}) x 10\u2076")
-print(f"Final guess |Qc|: ({best_fit_Qc/1e6:.6f} ± {error_fit_Qc/1e6:.6f}) x 10\u2076")
-print(f"Final guess phi: ({np.rad2deg(best_fit_phi):.4f} ± {np.rad2deg(error_fit_phi):.4f}) deg")
-print(f"Final guess fc: ({best_fit_fc / 1e9:.9f} ± {error_fit_fc / 1e9:.9f}) GHz")
+best_fit_Qi = 1 / (1 / best_fit_Q - 1 / best_fit_Qc)
+error_fit_Qi = best_fit_Qi ** 2 * np.sqrt((error_fit_Q / best_fit_Q ** 2) ** 2 + (error_fit_Qc / best_fit_Qc ** 2) ** 2)
 
-
+# Print final results
+print(f"Final Q: ({best_fit_Q/1e6:.6f} ± {error_fit_Q/1e6:.6f}) × 10⁶")
+print(f"Inferred internal quality factor (Qi): ({best_fit_Qi/1e6:.6f} ± {error_fit_Qi/1e6:.6f}) × 10⁶")
+print(f"Final |Qc|: ({best_fit_Qc/1e6:.6f} ± {error_fit_Qc/1e6:.6f}) × 10⁶")
+print(f"Final phi: ({np.rad2deg(best_fit_phi):.4f} ± {np.rad2deg(error_fit_phi):.4f})°")
+print(f"Final fc: ({best_fit_fc / 1e9:.9f} ± {error_fit_fc / 1e9:.9f}) GHz")
 
 # %% Function to plot final results
 def Plot_Final_Fit_Data(organized_data, fc, phi, Q, Qc):
